@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Femboy drop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --bg:#09080f; --panel:#13111d; --panel2:#1c1929; --line:#2c2740; --fg:#f3eefc; --muted:#8e86a8;
+  --pink:#ff3d9a; --pink2:#ff8fc8; --violet:#8a5cff; --win:#3ddc97; --lose:#ff4d6d; --metal:#24222e;
+  --display:"Russo One",Impact,system-ui,sans-serif; --body:"Manrope",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg);min-height:100%}
+body{font-family:var(--body);font-size:15px;background:radial-gradient(900px 420px at 15% -120px,#ff3d9a26,transparent),radial-gradient(800px 400px at 95% -100px,#8a5cff22,transparent),var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;padding-block:16px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{font-family:var(--display);font-size:24px;letter-spacing:.03em;display:flex;align-items:center;gap:10px;text-transform:uppercase}
+.logo span{color:var(--pink)}
+.logo i{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--pink),var(--violet));display:grid;place-items:center;font-style:normal;font-size:18px;transform:skewX(-8deg)}
+.spacer{flex:1}
+.bal{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 6px 5px 14px;font-family:var(--mono);font-weight:700}
+.coin{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffd6ec,var(--pink) 60%,#a01a5c);box-shadow:0 0 8px #ff3d9a88;display:inline-block;flex:none}
+.user{color:var(--muted);font-weight:600;font-size:14px}
+button{font-family:var(--body);font-weight:800;font-size:14px;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;color:#fff;background:var(--pink);transition:transform .1s,filter .15s}
+button:hover{filter:brightness(1.12)}button:active{transform:scale(.97)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--pink2);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed;filter:none}
+.ghost{background:var(--panel2);color:var(--fg)}
+.small{padding:6px 12px;font-size:13px;border-radius:999px}
+input{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+.tabs{display:flex;gap:6px;background:var(--panel);padding:5px;border-radius:14px;border:1px solid var(--line);width:fit-content;max-width:100%;overflow-x:auto}
+.tabs button{background:transparent;color:var(--muted);padding:9px 16px;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--panel2);color:var(--fg)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+h2{font-family:var(--display);font-weight:400;font-size:20px;margin:0;text-transform:uppercase;letter-spacing:.03em}
+h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.note{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* auth */
+.auth{max-width:380px;margin:8vh auto 0;width:100%}
+.auth form{display:flex;flex-direction:column;gap:10px}
+.auth .tabs{width:100%}.auth .tabs button{flex:1}
+.err{color:var(--lose);font-size:13px;min-height:18px}
+
+/* cases */
+.cases{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.case{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--fg)}
+.case[aria-pressed="true"]{border-color:var(--pink);box-shadow:0 0 0 1px var(--pink) inset,0 0 24px #ff3d9a33}
+.box{width:110px;height:80px;position:relative}
+.case .nm{font-family:var(--display);font-size:15px;text-transform:uppercase}
+.price{font-family:var(--mono);font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.roll{position:relative;overflow:hidden;border-radius:14px;background:#06050a;border:1px solid var(--line);height:154px}
+.strip{display:flex;gap:8px;position:absolute;left:0;top:14px;will-change:transform}
+.roll::before,.roll::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
+.roll::before{left:0;background:linear-gradient(90deg,#06050a,transparent)}
+.roll::after{right:0;background:linear-gradient(-90deg,#06050a,transparent)}
+.marker{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--pink);z-index:3;box-shadow:0 0 14px var(--pink)}
+
+/* item card */
+.item{flex:none;width:140px;height:126px;border-radius:10px;background:linear-gradient(180deg,var(--panel2),#14121e);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;position:relative;overflow:hidden;border-bottom:3px solid var(--r);padding:6px 8px 7px;text-align:left}
+.item::before{content:"";position:absolute;left:50%;top:38%;width:110px;height:70px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,color-mix(in srgb,var(--r) 45%,transparent),transparent)}
+.item svg{position:absolute;left:8px;right:8px;top:6px;width:calc(100% - 16px);height:70px}
+.item .w{font-size:11px;color:var(--muted);position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .s{font-size:12px;font-weight:800;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .v{font-family:var(--mono);font-size:11px;position:relative;display:flex;align-items:center;gap:4px;color:var(--pink2)}
+.item .v .coin{width:9px;height:9px}
+.pct{position:absolute;top:5px;right:7px;font-family:var(--mono);font-size:10px;color:var(--muted);z-index:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.grid .item{width:auto}
+
+/* upgrader */
+.upg{display:grid;grid-template-columns:1fr 240px 1fr;gap:16px;align-items:center}
+.slot{min-height:160px;border:1px dashed var(--line);border-radius:14px;display:grid;place-items:center;padding:10px;text-align:center}
+.slot .item{width:170px;height:140px}
+.wheel{position:relative;width:220px;height:220px;margin:0 auto}
+.wheel svg{width:100%;height:100%;display:block}
+.needle{position:absolute;inset:0;transition:transform 4s cubic-bezier(.12,.75,.15,1)}
+.needle::before{content:"";position:absolute;left:50%;top:4px;margin-left:-8px;border:8px solid transparent;border-top:18px solid var(--fg);filter:drop-shadow(0 0 6px #000)}
+.chance{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-family:var(--mono);pointer-events:none}
+.chance b{font-size:30px;display:block}
+.chance small{color:var(--muted);font-family:var(--body);font-size:12px}
+.pick{max-height:320px;overflow:auto;padding:2px}
+.pick .item{cursor:pointer}
+.pick .item[aria-pressed="true"]{outline:2px solid var(--pink);outline-offset:-2px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cols2>div{min-width:0;display:flex;flex-direction:column;gap:8px}
+.sell{position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;border-radius:999px;z-index:2;background:#0009}
+
+/* admin */
+.plist{display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;background:var(--panel2);border-radius:12px;padding:10px 12px}
+.prow .who{min-width:0}
+.prow .who b{display:block;overflow:hidden;text-overflow:ellipsis}
+.prow .who span{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;display:block}
+.prow .bl{font-family:var(--mono);font-weight:700}
+.prow .give{display:flex;gap:6px}
+.prow input{width:100px;padding:7px 10px}
+.stats{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.stats b{color:var(--fg)}
+.empty{color:var(--muted);text-align:center;padding:24px;grid-column:1/-1}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);opacity:0;background:var(--panel2);border:1px solid var(--line);padding:12px 18px;border-radius:12px;font-weight:800;transition:.25s;z-index:50;max-width:calc(100% - 32px);text-align:center;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.toast.win{border-color:var(--win);color:var(--win)}.toast.lose{border-color:var(--lose);color:var(--lose)}
+@media (max-width:760px){.upg,.cols2{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.needle{transition-duration:.3s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section id="setupView" class="panel" hidden style="max-width:720px;margin:6vh auto 0;width:100%">
+  <div class="logo"><i>F</i>Femboy <span>drop</span></div>
+  <h2>Первый запуск: настрой базу</h2>
+  <p class="note" style="font-size:14px;line-height:1.5">1. Нажми «Скопировать код».<br>2. Открой Supabase → проект <b>Furry-drop</b> → <b>SQL Editor</b> → <b>New query</b>.<br>3. Вставь (Ctrl+V) и нажми <b>Run</b>.<br>4. Вернись сюда и обнови страницу.</p>
+  <div class="row"><button id="copySql">Скопировать код</button><a class="note" href="https://supabase.com/dashboard/project/ycmgcqgnhdmyveajxybx/sql/new" target="_blank" rel="noopener" style="color:var(--pink2)">Открыть SQL Editor</a></div>
+  <textarea id="sqlBox" readonly style="width:100%;height:220px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px var(--mono)"></textarea>
+  <p class="note">Ещё в Supabase: Authentication → Sign In / Providers → Email → выключи «Confirm email».</p>
+</section>
+
+<section id="authView" class="auth" hidden>
+  <div class="logo" style="justify-content:center;margin-bottom:18px"><i>F</i>Femboy <span>drop</span></div>
+  <div class="panel">
+    <div class="tabs"><button id="aLogin" aria-selected="true">Вход</button><button id="aReg" aria-selected="false">Регистрация</button></div>
+    <form id="authForm">
+      <input id="fName" placeholder="Ник" autocomplete="username" hidden>
+      <input id="fEmail" type="email" placeholder="Почта" autocomplete="email" required>
+      <input id="fPass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password" minlength="6" required>
+      <div class="err" id="aErr"></div>
+      <button id="aBtn" type="submit">Войти</button>
+    </form>
+  </div>
+  <p class="note" style="text-align:center">Монеты игровые: их нельзя купить или вывести.</p>
+</section>
+
+<section id="appView" hidden style="display:contents">
+  <header>
+    <div class="logo"><i>F</i>Femboy <span>drop</span></div>
+    <div class="spacer"></div>
+    <span class="user" id="uName"></span>
+    <div class="bal"><span class="coin"></span><span id="bal">0</span><button class="small" id="bonusBtn">Бонус</button></div>
+    <button class="ghost small" id="logout">Выйти</button>
+  </header>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="cases" aria-selected="true">Кейсы</button>
+    <button role="tab" data-tab="upgrade" aria-selected="false">Апгрейдер</button>
+    <button role="tab" data-tab="inv" aria-selected="false">Инвентарь <span id="invCount"></span></button>
+    <button role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden>Админка</button>
+  </div>
+
+  <section class="panel" id="p-cases">
+    <div class="cases" id="caseList"></div>
+    <div class="roll"><div class="marker"></div><div class="strip" id="strip"></div></div>
+    <div class="row"><button id="openBtn">Открыть</button><button class="ghost" id="fastBtn" aria-pressed="false">Быстро: выкл</button><span class="note" id="caseHint"></span></div>
+    <h3>Содержимое кейса</h3>
+    <div class="grid" id="contents"></div>
+  </section>
+
+  <section class="panel" id="p-upgrade" hidden>
+    <div class="upg">
+      <div class="slot" id="fromSlot"></div>
+      <div class="wheel">
+        <svg viewBox="0 0 220 220" aria-hidden="true">
+          <circle cx="110" cy="110" r="92" fill="none" stroke="var(--panel2)" stroke-width="18"/>
+          <circle id="arc" cx="110" cy="110" r="92" fill="none" stroke="var(--pink)" stroke-width="18" transform="rotate(-90 110 110)" stroke-dasharray="0 999"/>
+        </svg>
+        <div class="needle" id="needle"></div>
+        <div class="chance"><div><b id="chanceTxt">0%</b><small>шанс</small></div></div>
+      </div>
+      <div class="slot" id="toSlot"></div>
+    </div>
+    <div class="row" style="justify-content:center"><div class="row" id="mults"></div><button id="upBtn" disabled>Апгрейд</button></div>
+    <div class="cols2">
+      <div><h3>Твой предмет</h3><div class="grid pick" id="pickFrom"></div></div>
+      <div><h3>Цель</h3><div class="grid pick" id="pickTo"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-inv" hidden>
+    <div class="row"><h2>Инвентарь</h2><div class="spacer"></div><span class="note" id="invTotal"></span><button class="ghost small" id="sellAll">Продать всё</button></div>
+    <div class="grid" id="invList"></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel" id="p-admin" hidden>
+    <h2>Админ-панель</h2>
+    <div class="row"><input id="aq" placeholder="Ник или почта игрока" style="flex:1;min-width:200px"><button id="aSearch">Найти</button></div>
+    <p class="note">Введи сумму и нажми «Выдать». Минус забирает монеты.</p>
+    <div class="plist" id="plist"></div>
+  </section>
+</section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="text/plain" id="setupSql">
+-- Femboy drop: вставь всё в Supabase → SQL Editor → New query → Run
+
+create table public.fd_players(
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text not null,
+  balance bigint not null default 500 check (balance>=0),
+  last_bonus timestamptz,
+  opened int not null default 0, ups int not null default 0, up_wins int not null default 0, best int not null default 0,
+  created_at timestamptz not null default now());
+create table public.fd_admins(user_id uuid primary key references auth.users(id) on delete cascade);
+create table public.fd_items(id text primary key, weapon text not null, kind text not null, skin text not null, rarity int not null, value int not null, c1 text not null, c2 text not null, pattern text not null);
+create table public.fd_cases(id text primary key, name text not null, price int not null, color text not null, sort int not null);
+create table public.fd_case_items(case_id text references public.fd_cases(id) on delete cascade, item_id text references public.fd_items(id), weight numeric not null, primary key(case_id,item_id));
+create table public.fd_inventory(id bigserial primary key, user_id uuid not null references auth.users(id) on delete cascade, item_id text not null references public.fd_items(id), created_at timestamptz not null default now());
+create index on public.fd_inventory(user_id);
+create index on public.fd_case_items(item_id);
+create table public.fd_log(id bigserial primary key, admin_id uuid, user_id uuid, amount bigint, created_at timestamptz default now());
+
+alter table public.fd_players enable row level security;
+alter table public.fd_admins enable row level security;
+alter table public.fd_items enable row level security;
+alter table public.fd_cases enable row level security;
+alter table public.fd_case_items enable row level security;
+alter table public.fd_inventory enable row level security;
+alter table public.fd_log enable row level security;
+create policy "own player" on public.fd_players for select to authenticated using (id=(select auth.uid()));
+create policy "own inv" on public.fd_inventory for select to authenticated using (user_id=(select auth.uid()));
+create policy "read items" on public.fd_items for select using (true);
+create policy "read cases" on public.fd_cases for select using (true);
+create policy "read case items" on public.fd_case_items for select using (true);
+
+create or replace function public.fd_is_admin() returns boolean language sql stable security definer set search_path=public as
+$$ select exists(select 1 from fd_admins where user_id=auth.uid()) $$;
+
+create or replace function public.fd_me() returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); p fd_players;
+begin
+  if u is null then raise exception 'Нужно войти'; end if;
+  insert into fd_players(id,username) select u, coalesce(nullif(raw_user_meta_data->>'username',''),nullif(split_part(email,'@',1),''),'player') from auth.users where id=u on conflict (id) do nothing;
+  select * into p from fd_players where id=u;
+  return json_build_object('username',p.username,'balance',p.balance,'last_bonus',p.last_bonus,'opened',p.opened,'ups',p.ups,'up_wins',p.up_wins,'best',p.best,'is_admin',fd_is_admin(),'now',now());
+end $$;
+
+create or replace function public.fd_bonus() returns bigint language plpgsql security definer set search_path=public as $$
+declare b bigint;
+begin
+  update fd_players set balance=balance+300,last_bonus=now() where id=auth.uid() and (last_bonus is null or last_bonus<now()-interval '10 minutes') returning balance into b;
+  if b is null then raise exception 'Бонус ещё не готов'; end if;
+  return b;
+end $$;
+
+create or replace function public.fd_open(p_case text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); c fd_cases; tot numeric; r numeric; it record; pick text; b bigint; inv bigint; v int;
+begin
+  select * into c from fd_cases where id=p_case; if c.id is null then raise exception 'Нет такого кейса'; end if;
+  update fd_players set balance=balance-c.price,opened=opened+1 where id=u and balance>=c.price returning balance into b;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  select sum(weight) into tot from fd_case_items where case_id=p_case;
+  r:=random()*tot;
+  for it in select item_id,weight from fd_case_items where case_id=p_case order by item_id loop
+    r:=r-it.weight; if r<0 then pick:=it.item_id; exit; end if;
+  end loop;
+  if pick is null then select item_id into pick from fd_case_items where case_id=p_case limit 1; end if;
+  insert into fd_inventory(user_id,item_id) values(u,pick) returning id into inv;
+  select value into v from fd_items where id=pick;
+  update fd_players set best=greatest(best,v) where id=u;
+  return json_build_object('item',pick,'inv',inv,'balance',b);
+end $$;
+
+create or replace function public.fd_sell(p_ids bigint[]) returns bigint language plpgsql security definer set search_path=public as $$
+declare s bigint; b bigint;
+begin
+  with d as (delete from fd_inventory where user_id=auth.uid() and id=any(p_ids) returning item_id)
+  select coalesce(sum(i.value),0) into s from d join fd_items i on i.id=d.item_id;
+  update fd_players set balance=balance+s where id=auth.uid() returning balance into b;
+  return b;
+end $$;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv int; tv int; ch numeric; roll numeric; win boolean; newinv bigint;
+begin
+  select i.value into fv from fd_inventory v join fd_items i on i.id=v.item_id where v.id=p_inv and v.user_id=u;
+  if fv is null then raise exception 'Предмет не найден'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.75, fv::numeric/tv*0.92);
+  roll:=random(); win:=roll<ch;
+  delete from fd_inventory where id=p_inv;
+  update fd_players set ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u;
+  if win then insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv; end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv);
+end $$;
+
+create or replace function public.fd_admin_find(q text) returns table(id uuid, username text, email text, balance bigint) language plpgsql security definer set search_path=public as $$
+begin
+  if not fd_is_admin() then raise exception 'Нет доступа'; end if;
+  return query select p.id,p.username,u.email::text,p.balance from fd_players p join auth.users u on u.id=p.id
+    where q='' or p.username ilike '%'||q||'%' or u.email ilike '%'||q||'%' order by p.created_at desc limit 50;
+end $$;
+
+create or replace function public.fd_admin_give(p_user uuid, p_amount bigint) returns bigint language plpgsql security definer set search_path=public as $$
+declare b bigint;
+begin
+  if not fd_is_admin() then raise exception 'Нет доступа'; end if;
+  update fd_players set balance=greatest(0,balance+p_amount) where id=p_user returning balance into b;
+  if b is null then raise exception 'Игрок не найден'; end if;
+  insert into fd_log(admin_id,user_id,amount) values(auth.uid(),p_user,p_amount);
+  return b;
+end $$;
+
+revoke execute on function public.fd_is_admin, public.fd_me, public.fd_bonus, public.fd_open, public.fd_sell, public.fd_upgrade, public.fd_admin_find, public.fd_admin_give from public, anon;
+grant execute on function public.fd_is_admin, public.fd_me, public.fd_bonus, public.fd_open, public.fd_sell, public.fd_upgrade, public.fd_admin_find, public.fd_admin_give to authenticated;
+
+insert into public.fd_items values
+('usp_dust','USP-S','pistol','Пыль',0,5,'#8a8170','#4a4436','camo'),
+('glock_moss','Glock-18','pistol','Мох',0,7,'#6b7b42','#2f3820','camo'),
+('mp5_grid','MP5','smg','Сетка',0,9,'#8994a3','#3f4752','grid'),
+('m4_steel','M4A4','rifle','Сталь',1,18,'#a9bccf','#4d5d6d','stripes'),
+('glock_neon','Glock-18','pistol','Неон',1,25,'#19e3c4','#0b4d5a','stripes'),
+('ak_rust','AK-47','ak','Ржавчина',1,30,'#c0612f','#4f2412','camo'),
+('deagle_bronze','Desert Eagle','deagle','Бронза',2,60,'#d29552','#5e3a18','stripes'),
+('usp_ice','USP-S','pistol','Лёд',2,75,'#c8ecff','#3f7fb0','hex'),
+('mp5_candy','MP5','smg','Карамель',2,90,'#ff7ab8','#ffcf5a','stripes'),
+('m4_pulse','M4A4','rifle','Пульс',3,180,'#5a78ff','#121a44','waves'),
+('awp_jungle','AWP','awp','Джунгли',3,220,'#35c97a','#0d3521','camo'),
+('ak_sakura','AK-47','ak','Сакура',3,260,'#ffa3cc','#5e1a40','waves'),
+('deagle_inferno','Desert Eagle','deagle','Инферно',4,520,'#ff7a1a','#3a0b00','waves'),
+('m4_void','M4A4','rifle','Пустота',4,640,'#8a4dff','#14072a','hex'),
+('awp_frost','AWP','awp','Мороз',4,800,'#a6dcff','#1b3766','hex'),
+('ak_dragon','AK-47','ak','Красный дракон',5,1600,'#ef5050','#2a0808','waves'),
+('awp_gold','AWP','awp','Золотой век',5,2200,'#ffd65a','#6b4800','stripes'),
+('knife_fade','Нож-бабочка','butterfly','Градиент',6,6000,'#ff4fb3','#4b69ff','fade'),
+('knife_night','Керамбит','karambit','Полночь',6,8000,'#3a3f5c','#9aa0c8','waves'),
+('gloves_pink','Перчатки','gloves','Розовый туман',6,9500,'#ff94d4','#3a1440','hex'),
+('knife_gold','Керамбит','karambit','Золото',6,15000,'#ffd65a','#9a6400','fade');
+
+insert into public.fd_cases values
+('poor','Нищий',15,'#8994a3',1),('cute','Милый',80,'#ff7ab8',2),('pink','Розовый',300,'#ff4fb3',3),('blade','Ножевой',2500,'#ffd65a',4);
+insert into public.fd_case_items values
+('poor','usp_dust',30),('poor','glock_moss',26),('poor','mp5_grid',20),('poor','m4_steel',12),('poor','glock_neon',7),('poor','ak_rust',3.5),('poor','deagle_bronze',1.2),('poor','usp_ice',0.3),
+('cute','mp5_grid',18),('cute','m4_steel',18),('cute','glock_neon',16),('cute','ak_rust',14),('cute','deagle_bronze',12),('cute','usp_ice',9),('cute','mp5_candy',7),('cute','m4_pulse',3.5),('cute','awp_jungle',1.6),('cute','ak_sakura',0.7),('cute','knife_fade',0.2),
+('pink','deagle_bronze',20),('pink','usp_ice',18),('pink','mp5_candy',16),('pink','m4_pulse',14),('pink','awp_jungle',12),('pink','ak_sakura',9),('pink','deagle_inferno',5),('pink','m4_void',3),('pink','awp_frost',1.5),('pink','ak_dragon',0.6),('pink','knife_fade',0.3),('pink','gloves_pink',0.1),
+('blade','deagle_inferno',22),('blade','m4_void',20),('blade','awp_frost',18),('blade','ak_dragon',15),('blade','awp_gold',10),('blade','knife_fade',7),('blade','knife_night',4.5),('blade','gloves_pink',2.5),('blade','knife_gold',1);
+
+-- Как дать админку: впиши почту и запусти отдельно
+-- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
+
+</script>
+<script>
+const SB_URL='https://ycmgcqgnhdmyveajxybx.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljbWdjcWduaGRteXZlYWp4eWJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MTE0MjgsImV4cCI6MjEwNzk4NzQyOH0.Xtxk_UeKBvZ3nRbaedMOdYlt847c6w_xLG77iYRlscU';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const $=id=>document.getElementById(id);
+const fmt=n=>Math.round(n).toLocaleString('ru-RU');
+const RAR=['#b0c3d9','#5e98d9','#4b69ff','#8847ff','#d32ce6','#eb4b4b','#e4ae39'];
+const RNAME=['Ширпотреб','Промышленное','Армейское','Запрещённое','Засекреченное','Тайное','Редкое'];
+function toast(t,c=''){const e=$('toast');e.textContent=t;e.className='toast on '+c;clearTimeout(e._t);e._t=setTimeout(()=>e.className='toast',2600)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ---------- weapon drawings ---------- */
+const SHAPES={
+ ak:{p:['M6 38 L44 31 L58 34 L58 46 L46 46 L10 55 Z','M58 32 L134 32 L134 44 L58 46 Z','M134 33 L166 34 L166 41 L134 42 Z'],
+     m:['M166 36 L198 36 L198 39 L166 39 Z','M100 44 L114 44 L121 66 L106 71 Z','M70 45 L81 45 L77 63 L66 62 Z','M142 29 L147 29 L147 32 L142 32 Z']},
+ rifle:{p:['M6 35 L34 32 L46 36 L46 46 L36 46 L8 51 Z','M46 31 L120 31 L120 44 L46 46 Z','M120 32 L170 32 L170 42 L120 42 Z'],
+     m:['M170 35 L198 35 L198 38 L170 38 Z','M96 44 L108 44 L111 65 L99 65 Z','M62 45 L72 45 L68 62 L58 61 Z','M68 24 L104 24 L104 31 L68 31 Z']},
+ awp:{p:['M4 35 L40 30 L56 34 L54 49 L44 49 L36 43 L6 51 Z','M56 31 L122 31 L122 43 L56 44 Z'],
+     m:['M122 34 L198 34 L198 38 L122 38 Z','M66 18 L114 18 L120 22 L120 27 L114 30 L66 30 L60 27 L60 21 Z','M84 43 L97 43 L97 53 L84 53 Z','M50 21 L60 22 L60 27 L50 28 Z']},
+ pistol:{p:['M48 27 L152 27 L152 39 L48 39 Z','M56 39 L130 39 L128 45 L98 46 L88 71 L64 71 L70 45 L56 44 Z'],
+     m:['M152 31 L166 31 L166 36 L152 36 Z','M92 45 L100 45 L97 53 Z']},
+ deagle:{p:['M40 22 L160 22 L160 39 L40 39 Z','M48 39 L122 39 L120 45 L96 47 L86 73 L58 73 L64 46 L48 44 Z'],
+     m:['M160 26 L168 26 L168 35 L160 35 Z','M90 46 L99 46 L96 55 Z']},
+ smg:{p:['M8 37 L36 35 L44 38 L44 45 L10 49 Z','M44 30 L142 30 L142 44 L44 44 Z'],
+     m:['M142 34 L182 34 L182 39 L142 39 Z','M100 44 L111 44 L115 67 L104 67 Z','M58 44 L69 44 L65 63 L54 63 Z']},
+ butterfly:{p:['M78 34 L168 31 Q190 35 194 41 L78 45 Z'],
+     m:['M6 33 L78 33 L78 39 L6 39 Z','M6 40 L78 40 L78 46 L6 46 Z']},
+ karambit:{p:['M92 30 Q150 18 182 54 Q172 57 163 50 Q140 33 100 43 Z'],
+     m:['M28 34 L96 29 L101 42 L32 46 Z','M18 40 m-12 0 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0 M18 40 m-6 0 a6 6 0 1 1 12 0 a6 6 0 1 1 -12 0']},
+ gloves:{p:['M64 68 L62 38 Q62 32 68 32 L70 14 Q74 9 78 14 L80 31 L84 9 Q88 4 92 9 L93 31 L98 11 Q102 7 106 11 L106 33 L111 17 Q115 13 119 17 L118 46 L130 37 Q137 33 139 40 L122 61 L120 70 Z',
+     'M24 66 L22 40 Q22 34 28 34 L30 16 Q34 11 38 16 L40 33 L44 11 Q48 6 52 11 L53 33 L56 15 Q60 11 64 15 L62 68 Z'],
+     m:['M62 66 L122 66 L122 77 L62 77 Z','M20 64 L64 64 L64 75 L20 75 Z']}
+};
+let svgN=0;
+function weapon(it){
+  const n=++svgN, sh=SHAPES[it.kind]||SHAPES.rifle, c1=it.c1, c2=it.c2;
+  let pat='';
+  switch(it.pattern){
+    case 'camo':pat=`<pattern id="p${n}" width="46" height="34" patternUnits="userSpaceOnUse"><ellipse cx="10" cy="8" rx="11" ry="6" fill="${c2}"/><ellipse cx="34" cy="22" rx="13" ry="7" fill="${c2}"/><ellipse cx="22" cy="30" rx="7" ry="4" fill="#0004"/><ellipse cx="40" cy="4" rx="6" ry="4" fill="#fff2"/></pattern>`;break;
+    case 'stripes':pat=`<pattern id="p${n}" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="5" height="14" fill="${c2}"/></pattern>`;break;
+    case 'hex':pat=`<pattern id="p${n}" width="14" height="12" patternUnits="userSpaceOnUse"><path d="M3.5 0 L10.5 0 L14 6 L10.5 12 L3.5 12 L0 6 Z" fill="none" stroke="${c2}" stroke-width="1.6"/></pattern>`;break;
+    case 'waves':pat=`<pattern id="p${n}" width="30" height="12" patternUnits="userSpaceOnUse"><path d="M0 6 Q7.5 0 15 6 T30 6" fill="none" stroke="${c2}" stroke-width="2.4"/></pattern>`;break;
+    case 'grid':pat=`<pattern id="p${n}" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0 L0 0 L0 8" fill="none" stroke="${c2}" stroke-width="1.2"/></pattern>`;break;
+    default:pat=`<pattern id="p${n}" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="none"/></pattern>`;
+  }
+  const grad=it.pattern==='fade'
+    ?`<linearGradient id="g${n}" x1="0" x2="1" y1="0" y2=".3"><stop offset="0" stop-color="${c1}"/><stop offset=".5" stop-color="#ffd65a"/><stop offset="1" stop-color="${c2}"/></linearGradient>`
+    :`<linearGradient id="g${n}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="color-mix(in srgb, ${c1} 70%, #000)"/></linearGradient>`;
+  const paint=sh.p.map(d=>`<path d="${d}"/>`).join('');
+  return `<svg viewBox="0 0 200 80" aria-hidden="true"><defs>${grad}${pat}<clipPath id="c${n}">${paint}</clipPath>
+    <linearGradient id="s${n}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient></defs>
+    <g fill="url(#g${n})">${paint}</g>
+    <rect width="200" height="80" fill="url(#p${n})" clip-path="url(#c${n})" opacity=".85"/>
+    ${sh.m.map(d=>`<path d="${d}" fill="#24222e" fill-rule="evenodd" stroke="#0007" stroke-width="1"/>`).join('')}
+    <rect width="200" height="80" fill="url(#s${n})" clip-path="url(#c${n})"/>
+    <g fill="none" stroke="#000a" stroke-width="1.2" stroke-linejoin="round">${paint}</g></svg>`;
+}
+function card(id,extra=''){
+  const it=ITEMS[id], d=document.createElement('div');
+  d.className='item'; d.style.setProperty('--r',RAR[it.rarity]); d.title=RNAME[it.rarity];
+  d.innerHTML=`${extra}${weapon(it)}<span class="w">${esc(it.weapon)}</span><span class="s">${esc(it.skin)}</span><span class="v"><span class="coin"></span>${fmt(it.value)}</span>`;
+  return d;
+}
+function caseArt(c){
+  return `<svg class="box" viewBox="0 0 110 80" aria-hidden="true"><defs><linearGradient id="cb${c.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c.color}"/><stop offset="1" stop-color="color-mix(in srgb, ${c.color} 40%, #000)"/></linearGradient></defs>
+  <path d="M8 26 L55 12 L102 26 L102 66 L55 78 L8 66 Z" fill="url(#cb${c.id})" stroke="#0008"/>
+  <path d="M8 26 L55 40 L102 26 M55 40 L55 78" fill="none" stroke="#0006" stroke-width="2"/>
+  <path d="M8 40 L55 54 L102 40" fill="none" stroke="#fff5" stroke-width="3"/>
+  <rect x="48" y="44" width="14" height="10" rx="2" fill="#24222e" stroke="#fff6"/></svg>`;
+}
+
+/* ---------- state ---------- */
+let ITEMS={},CASES=[],CI={},ME=null,INV=[],cur=0,busy=false,fast=false,serverOffset=0;
+let from=null,to=null,rot=0;
+
+async function rpc(fn,args){const {data,error}=await sb.rpc(fn,args);if(error)throw new Error(error.message);return data}
+
+async function loadCatalog(){
+  const [a,b,c]=await Promise.all([sb.from('fd_items').select('*'),sb.from('fd_cases').select('*').order('sort'),sb.from('fd_case_items').select('*')]);
+  if(a.error||b.error||c.error)throw new Error((a.error||b.error||c.error).message);
+  ITEMS={};a.data.forEach(i=>ITEMS[i.id]=i);CASES=b.data;CI={};c.data.forEach(x=>(CI[x.case_id]=CI[x.case_id]||[]).push(x));
+}
+async function loadMe(){ME=await rpc('fd_me');serverOffset=new Date(ME.now)-Date.now();}
+async function loadInv(){const {data,error}=await sb.from('fd_inventory').select('id,item_id').order('id',{ascending:false});if(error)throw error;INV=data}
+
+function renderTop(){
+  if(!ME)return;
+  $('bal').textContent=fmt(ME.balance);$('uName').textContent=ME.username;
+  $('adminTab').hidden=!ME.is_admin;
+  const left=ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
+  const b=$('bonusBtn');
+  if(left<=0){b.disabled=false;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
+  $('invCount').textContent=INV.length?`(${INV.length})`:'';
+  const c=CASES[cur];if(c){$('openBtn').disabled=busy||ME.balance<c.price;$('openBtn').textContent='Открыть за '+fmt(c.price);
+  $('caseHint').textContent=ME.balance<c.price?'Не хватает монет: продай предметы или возьми бонус':''}
+}
+setInterval(renderTop,1000);
+
+/* ---------- auth ---------- */
+let mode='login';
+function setMode(m){mode=m;$('aLogin').setAttribute('aria-selected',m==='login');$('aReg').setAttribute('aria-selected',m==='reg');
+  $('fName').hidden=m!=='reg';$('fName').required=m==='reg';$('aBtn').textContent=m==='reg'?'Создать аккаунт':'Войти';$('aErr').textContent=''}
+$('aLogin').onclick=()=>setMode('login');$('aReg').onclick=()=>setMode('reg');
+$('authForm').onsubmit=async e=>{
+  e.preventDefault();$('aErr').textContent='';$('aBtn').disabled=true;
+  const email=$('fEmail').value.trim(),password=$('fPass').value;
+  try{
+    if(mode==='reg'){
+      const {data,error}=await sb.auth.signUp({email,password,options:{data:{username:$('fName').value.trim()}}});
+      if(error)throw error;
+      if(!data.session){$('aErr').textContent='Аккаунт создан. Проверь почту и подтверди, потом войди.';setMode('login');}
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;
+    }
+  }catch(err){$('aErr').textContent=/Invalid login/.test(err.message)?'Неверная почта или пароль':err.message}
+  $('aBtn').disabled=false;
+};
+$('logout').onclick=()=>sb.auth.signOut();
+
+async function enterApp(){
+  $('authView').hidden=true;$('appView').hidden=false;
+  try{await loadCatalog();await loadMe();await loadInv();}
+  catch(e){toast('Ошибка загрузки: '+e.message,'lose');return}
+  renderCases();fillStrip();renderTop();
+}
+function showAuth(){$('appView').hidden=true;$('authView').hidden=false;ME=null}
+/* ---------- first-run setup ---------- */
+$('sqlBox').value=$('setupSql').textContent.trim();
+$('copySql').onclick=async()=>{const t=$('sqlBox');try{await navigator.clipboard.writeText(t.value);toast('Код скопирован','win')}catch(e){t.focus();t.select();document.execCommand('copy');toast('Код выделен, нажми Ctrl+C')}};
+(async()=>{
+  const {error}=await sb.from('fd_items').select('id').limit(1);
+  if(error&&/does not exist|schema cache|Could not find/i.test(error.message)){$('setupView').hidden=false;return}
+  sb.auth.onAuthStateChange((ev,s)=>{if(s){if(!ME)enterApp()}else showAuth()});
+})();
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
+  if(busy)return;
+  document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x===t));
+  ['cases','upgrade','inv','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
+  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();
+});
+$('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
+
+/* ---------- cases ---------- */
+function renderCases(){
+  const L=$('caseList');L.innerHTML='';
+  CASES.forEach((c,i)=>{const b=document.createElement('button');b.className='case';b.setAttribute('aria-pressed',i===cur);
+    b.innerHTML=`${caseArt(c)}<span class="nm">${esc(c.name)}</span><span class="price"><span class="coin"></span>${fmt(c.price)}</span>`;
+    b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrip();renderTop()};L.appendChild(b)});
+  const list=(CI[CASES[cur].id]||[]).slice(),tot=list.reduce((s,x)=>s+ +x.weight,0);
+  const C=$('contents');C.innerHTML='';
+  list.sort((a,b)=>ITEMS[b.item_id].value-ITEMS[a.item_id].value).forEach(x=>{const p=x.weight/tot*100;C.appendChild(card(x.item_id,`<span class="pct">${p<1?p.toFixed(2):p.toFixed(1)}%</span>`))});
+}
+function randKey(){const l=CI[CASES[cur].id],t=l.reduce((s,x)=>s+ +x.weight,0);let r=Math.random()*t;for(const x of l){if((r-=x.weight)<0)return x.item_id}return l[0].item_id}
+const W=148,WIN_I=42;
+function fillStrip(win){const s=$('strip');s.style.transition='none';s.style.transform='translateX(0)';s.innerHTML='';
+  for(let i=0;i<50;i++)s.appendChild(card(i===WIN_I&&win?win:randKey()))}
+$('openBtn').onclick=async()=>{
+  const c=CASES[cur];if(busy||ME.balance<c.price)return;busy=true;renderTop();
+  let res;try{res=await rpc('fd_open',{p_case:c.id})}catch(e){busy=false;renderTop();toast(e.message,'lose');return}
+  ME.balance=res.balance;fillStrip(res.item);renderTop();
+  const s=$('strip'),box=s.parentElement.clientWidth,off=WIN_I*W+70-box/2+(Math.random()*90-45),dur=fast?1.2:5.5;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{s.style.transition=`transform ${dur}s cubic-bezier(.08,.6,.12,1)`;s.style.transform=`translateX(${-off}px)`}));
+  setTimeout(()=>{INV.unshift({id:res.inv,item_id:res.item});const it=ITEMS[res.item];ME.best=Math.max(ME.best,it.value);ME.opened++;
+    busy=false;renderTop();toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')},dur*1000+150);
+};
+$('fastBtn').onclick=e=>{fast=!fast;e.target.setAttribute('aria-pressed',fast);e.target.textContent='Быстро: '+(fast?'вкл':'выкл')};
+
+/* ---------- upgrader ---------- */
+function chance(){if(!from||!to)return 0;return Math.min(.75,ITEMS[from.item_id].value/ITEMS[to].value*.92)}
+function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
+function renderUpg(){
+  if(from&&!INV.find(x=>x.id===from.id))from=null;
+  const PF=$('pickFrom');PF.innerHTML='';
+  if(!INV.length)PF.innerHTML='<div class="empty">Инвентарь пуст. Открой кейс.</div>';
+  INV.forEach(x=>{const e=card(x.item_id);selectable(e,from&&from.id===x.id,()=>{if(busy)return;from=x;if(to&&ITEMS[to].value<=ITEMS[x.item_id].value)to=null;renderUpg()});PF.appendChild(e)});
+  const PT=$('pickTo');PT.innerHTML='';const min=from?ITEMS[from.item_id].value:0;
+  Object.values(ITEMS).filter(i=>i.value>min).sort((a,b)=>a.value-b.value).forEach(i=>{const e=card(i.id);selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
+  $('fromSlot').innerHTML=from?'':'<span class="note">Выбери свой предмет</span>';if(from)$('fromSlot').appendChild(card(from.item_id));
+  $('toSlot').innerHTML=to?'':'<span class="note">Выбери цель</span>';if(to)$('toSlot').appendChild(card(to));
+  const M=$('mults');M.innerHTML='';
+  if(from)[2,3,5,10].forEach(m=>{const fv=ITEMS[from.item_id].value,t=fv*m;
+    const best=Object.values(ITEMS).filter(i=>i.value>fv).sort((a,b)=>Math.abs(a.value-t)-Math.abs(b.value-t))[0];if(!best)return;
+    const b=document.createElement('button');b.className='ghost small';b.textContent='x'+m;b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};M.appendChild(b)});
+  const ch=chance(),L=2*Math.PI*92;$('arc').setAttribute('stroke-dasharray',`${ch*L} ${L}`);
+  $('chanceTxt').textContent=(ch*100).toFixed(1)+'%';$('upBtn').disabled=busy||!from||!to;
+}
+$('upBtn').onclick=async()=>{
+  if(busy||!from||!to)return;busy=true;$('upBtn').disabled=true;
+  const f=from,t=to;let res;
+  try{res=await rpc('fd_upgrade',{p_inv:f.id,p_target:t})}catch(e){busy=false;renderUpg();toast(e.message,'lose');return}
+  rot+=360*5+((res.roll*360)-(rot%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
+  setTimeout(()=>{INV=INV.filter(x=>x.id!==f.id);ME.ups++;
+    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');from=INV[0];to=null}
+    else{toast(`Не повезло: ${ITEMS[f.item_id].weapon} | ${ITEMS[f.item_id].skin} сгорел`,'lose');from=null}
+    busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:4100);
+};
+
+/* ---------- inventory ---------- */
+async function sell(ids){try{ME.balance=await rpc('fd_sell',{p_ids:ids});INV=INV.filter(x=>!ids.includes(x.id));renderInv();renderTop()}catch(e){toast(e.message,'lose')}}
+function renderInv(){
+  const L=$('invList');L.innerHTML='';
+  if(!INV.length)L.innerHTML='<div class="empty">Пока пусто. Открой первый кейс.</div>';
+  INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);L.appendChild(e)});
+  $('invTotal').textContent='Стоимость: '+fmt(INV.reduce((s,x)=>s+ITEMS[x.item_id].value,0));
+  $('sellAll').disabled=!INV.length;
+  $('stats').innerHTML=`<span>Кейсов открыто: <b>${ME.opened}</b></span><span>Апгрейды: <b>${ME.up_wins}/${ME.ups}</b></span><span>Лучший дроп: <b>${fmt(ME.best)}</b></span>`;
+}
+$('sellAll').onclick=()=>sell(INV.map(x=>x.id));
+
+/* ---------- admin ---------- */
+async function adminSearch(){
+  const P=$('plist');P.innerHTML='<div class="note">Загрузка…</div>';
+  let rows;try{rows=await rpc('fd_admin_find',{q:$('aq').value.trim()})}catch(e){P.innerHTML='';toast(e.message,'lose');return}
+  P.innerHTML='';if(!rows.length)P.innerHTML='<div class="empty">Никого не нашли</div>';
+  rows.forEach(r=>{const d=document.createElement('div');d.className='prow';
+    d.innerHTML=`<div class="who"><b></b><span></span></div><div class="bl"></div><div class="give"><input type="number" placeholder="Сумма" id="g-${r.id}"><button class="small">Выдать</button></div>`;
+    d.querySelector('b').textContent=r.username;d.querySelector('.who span').textContent=r.email;d.querySelector('.bl').textContent=fmt(r.balance);
+    d.querySelector('button').onclick=async()=>{const v=parseInt(d.querySelector('input').value,10);if(!v){toast('Введи сумму','lose');return}
+      try{const nb=await rpc('fd_admin_give',{p_user:r.id,p_amount:v});d.querySelector('.bl').textContent=fmt(nb);d.querySelector('input').value='';
+        toast(`${r.username}: ${v>0?'+':''}${fmt(v)}`,'win');if(ME&&r.username===ME.username){await loadMe();renderTop()}}catch(e){toast(e.message,'lose')}};
+    P.appendChild(d)});
+}
+$('aSearch').onclick=adminSearch;$('aq').onkeydown=e=>{if(e.key==='Enter')adminSearch()};
+</script>
+</body>
+</html>
