@@ -170,6 +170,7 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <button role="tab" data-tab="cases" aria-selected="true">Кейсы</button>
     <button role="tab" data-tab="upgrade" aria-selected="false">Апгрейдер</button>
     <button role="tab" data-tab="inv" aria-selected="false">Инвентарь <span id="invCount"></span></button>
+    <button role="tab" data-tab="shop" aria-selected="false">Магазин</button>
     <button role="tab" data-tab="settings" aria-selected="false">Настройки</button>
     <button role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden>Админка</button>
   </div>
@@ -210,7 +211,7 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
       <button class="ghost small" id="chainBtn" aria-pressed="false">Цепочкой: выкл</button>
       <span class="note" id="chainHint"></span>
     </div>
-    <p class="note" style="text-align:center;margin:0">При проигрыше утешительный приз: от 1 до 7% стоимости скинов монетами. Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
+    <p class="note" style="text-align:center;margin:0">При проигрыше утешительный приз: случайный скин стоимостью до 7% от сгоревших. Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
     <div class="cols2">
       <div><h3>Твой предмет</h3><div class="grid pick" id="pickFrom"></div></div>
       <div><h3>Цель</h3><div class="grid pick" id="pickTo"></div></div>
@@ -221,6 +222,16 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <div class="row"><h2>Инвентарь</h2><div class="spacer"></div><span class="note" id="invTotal"></span><button class="ghost small" id="sellAll">Продать всё</button></div>
     <div class="grid" id="invList"></div>
     <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel" id="p-shop" hidden>
+    <div class="row"><h2>Магазин</h2><div class="spacer"></div>
+      <input id="shopQ" placeholder="Поиск: AWP, нож, Сакура…" style="max-width:260px">
+      <div class="seg" id="shopSort"><button data-s="asc" aria-pressed="true">Дешевле</button><button data-s="desc" aria-pressed="false">Дороже</button></div>
+    </div>
+    <div class="seg" id="shopRar"></div>
+    <p class="note" style="margin:0">Цена в магазине на 10% выше, чем за скин дают при продаже.</p>
+    <div class="grid" id="shopList"></div>
   </section>
 
   <section class="panel" id="p-settings" hidden>
@@ -487,6 +498,53 @@ create or replace function public.fd_upgrade(p_inv bigint, p_target text) return
   select public.fd_upgrade_many(array[p_inv], p_target)
 $$;
 
+-- Femboy drop: утешительный приз скином + магазин скинов
+create or replace function public.fd_upgrade_many(p_invs bigint[], p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv bigint; n int; tv int; ch numeric; roll numeric; win boolean; newinv bigint; comp text; compinv bigint;
+begin
+  if coalesce(array_length(p_invs,1),0)<1 or array_length(p_invs,1)>10 then raise exception 'Выбери от 1 до 10 скинов'; end if;
+  select coalesce(sum(i.value),0), count(*) into fv, n from fd_inventory v join fd_items i on i.id=v.item_id where v.id=any(p_invs) and v.user_id=u;
+  if n<>(select count(distinct x) from unnest(p_invs) x) then raise exception 'Предмет не найден'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  roll:=random(); win:=roll<ch;
+  delete from fd_inventory where id=any(p_invs) and user_id=u;
+  update fd_players set ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u;
+  if win then
+    insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv;
+  else
+    -- утешительный приз: случайный скин стоимостью до 7% от сгоревших
+    select id into comp from fd_items where value<=fv*0.07 order by random()*value desc limit 1;
+    if comp is not null then insert into fd_inventory(user_id,item_id) values(u,comp) returning id into compinv; end if;
+  end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv,'comp_item',comp,'comp_inv',compinv);
+end $$;
+revoke execute on function public.fd_upgrade_many(bigint[],text) from public, anon;
+grant execute on function public.fd_upgrade_many(bigint[],text) to authenticated;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language sql security definer set search_path=public as $$
+  select public.fd_upgrade_many(array[p_inv], p_target)
+$$;
+revoke execute on function public.fd_upgrade(bigint,text) from public, anon;
+grant execute on function public.fd_upgrade(bigint,text) to authenticated;
+
+-- магазин: скин стоит на 10% дороже, чем за него дают при продаже
+create or replace function public.fd_buy(p_item text, p_n int) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); price bigint; b bigint; ids bigint[]:='{}'; k int; x bigint;
+begin
+  if p_n<1 or p_n>10 then raise exception 'Можно купить от 1 до 10 штук'; end if;
+  select ceil(value*1.1) into price from fd_items where id=p_item;
+  if price is null then raise exception 'Нет такого скина'; end if;
+  update fd_players set balance=balance-price*p_n where id=u and balance>=price*p_n returning balance into b;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  for k in 1..p_n loop insert into fd_inventory(user_id,item_id) values(u,p_item) returning id into x; ids:=ids||x; end loop;
+  update fd_players set best=greatest(best,(select value from fd_items where id=p_item)) where id=u;
+  return json_build_object('ids',ids,'balance',b);
+end $$;
+revoke execute on function public.fd_buy(text,int) from public, anon;
+grant execute on function public.fd_buy(text,int) to authenticated;
+
 -- Как дать админку: впиши почту и запусти отдельно
 -- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
 
@@ -631,8 +689,8 @@ $('copySql').onclick=async()=>{const t=$('sqlBox');try{await navigator.clipboard
 document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
   if(busy)return;
   document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x===t));
-  ['cases','upgrade','inv','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
-  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();if(t.dataset.tab==='settings')renderSettings();
+  ['cases','upgrade','inv','shop','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
+  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();if(t.dataset.tab==='settings')renderSettings();if(t.dataset.tab==='shop')renderShop();
 });
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
 
@@ -769,9 +827,36 @@ $('upBtn').onclick=async()=>{
   setTimeout(()=>{INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];
     if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=CFG.chain?pickTarget():null}
     else{const lost=f.length>1?`${f.length} скинов сгорели`:`${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`;
-      if(res.comp>0){ME.balance=res.balance;toast(`Не повезло: ${lost}. Утешительный приз +${fmt(res.comp)}`,'lose')}else toast('Не повезло: '+lost,'lose')}
+      if(res.comp_item&&ITEMS[res.comp_item]){const ci=ITEMS[res.comp_item];INV.unshift({id:res.comp_inv,item_id:res.comp_item});toast(`Не повезло: ${lost}. Утешительный приз: ${ci.weapon} | ${ci.skin} (${fmt(ci.value)})`,'lose')}
+      else if(res.comp>0){ME.balance=res.balance;toast(`Не повезло: ${lost}. Утешительный приз +${fmt(res.comp)}`,'lose')}else toast('Не повезло: '+lost,'lose')}
     busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:(CFG.fastUp?900:4100));
 };
+
+/* ---------- shop ---------- */
+let shopSort='asc',shopRar=-1;
+const shopPrice=i=>Math.ceil(i.value*1.1);
+function renderShop(){
+  const R=$('shopRar');if(!R.children.length){[['Все',-1]].concat(RNAME.map((n,i)=>[n,i])).forEach(([n,i])=>{const b=document.createElement('button');b.textContent=n;b.dataset.r=i;
+    b.style.fontFamily='var(--body)';if(i>=0)b.style.color=RAR[i];b.onclick=()=>{shopRar=i;renderShop()};R.appendChild(b)})}
+  [...R.children].forEach(b=>b.setAttribute('aria-pressed',+b.dataset.r===shopRar));
+  [...$('shopSort').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===shopSort));
+  const q=$('shopQ').value.trim().toLowerCase();
+  const list=Object.values(ITEMS).filter(i=>(shopRar<0||i.rarity===shopRar)&&(!q||(i.weapon+' '+i.skin).toLowerCase().includes(q)||(q.includes('нож')&&/нож|керамбит/i.test(i.weapon))))
+    .sort((a,b)=>shopSort==='asc'?a.value-b.value:b.value-a.value);
+  const L=$('shopList');L.innerHTML='';
+  if(!list.length)L.innerHTML='<div class="empty">Ничего не нашли</div>';
+  list.forEach(i=>{const e=card(i.id);const p=shopPrice(i);e.querySelector('.v').innerHTML=`<span class="coin"></span>${fmt(p)}`;
+    const b=document.createElement('button');b.className='sell up';b.style.left='auto';b.style.right='5px';b.textContent='Купить';b.disabled=ME&&ME.balance<p;
+    b.onclick=()=>buy(i.id,b);e.appendChild(b);L.appendChild(e)});
+}
+async function buy(id,btn){
+  if(busy)return;btn.disabled=true;
+  try{const r=await rpc('fd_buy',{p_item:id,p_n:1});ME.balance=r.balance;r.ids.forEach(x=>INV.unshift({id:x,item_id:id}));
+    const i=ITEMS[id];toast(`Куплено: ${i.weapon} | ${i.skin}`,'win');renderTop();renderShop()}
+  catch(e){btn.disabled=false;toast(/fd_buy|schema cache|Could not find/i.test(e.message)?'Магазин ещё не включён в базе':e.message,'lose')}
+}
+$('shopQ').oninput=renderShop;
+[...$('shopSort').children].forEach(b=>b.onclick=()=>{shopSort=b.dataset.s;renderShop()});
 
 /* ---------- inventory ---------- */
 async function sell(ids){try{ME.balance=await rpc('fd_sell',{p_ids:ids});INV=INV.filter(x=>!ids.includes(x.id));renderInv();renderTop()}catch(e){toast(e.message,'lose')}}
