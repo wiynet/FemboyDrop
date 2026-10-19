@@ -61,6 +61,14 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .roll::before,.roll::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
 .roll::before{left:0;background:linear-gradient(90deg,#06050a,transparent)}
 .roll::after{right:0;background:linear-gradient(-90deg,#06050a,transparent)}
+.stack{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+.slot .stack .item{width:84px;height:76px;padding:3px 5px}
+.slot .stack .item svg{height:40px;top:3px;left:4px;width:calc(100% - 8px)}
+.slot .stack .item .w,.slot .stack .item .v{display:none}
+.slot .stack .item .s{font-size:10px}
+.stacktotal{margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.stacktotal b{color:var(--fg);font-family:var(--mono)}
+.slot{flex-direction:column}
 .rolls{display:flex;flex-direction:column;gap:8px}
 .rolls.multi .roll{height:132px}
 .rolls.multi .strip{top:3px}
@@ -424,6 +432,25 @@ begin
   return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv);
 end $$;
 
+-- апгрейд сразу нескольких своих скинов (до 10)
+create or replace function public.fd_upgrade_many(p_invs bigint[], p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv bigint; n int; tv int; ch numeric; roll numeric; win boolean; newinv bigint;
+begin
+  if coalesce(array_length(p_invs,1),0)<1 or array_length(p_invs,1)>10 then raise exception 'Выбери от 1 до 10 скинов'; end if;
+  select coalesce(sum(i.value),0), count(*) into fv, n from fd_inventory v join fd_items i on i.id=v.item_id where v.id=any(p_invs) and v.user_id=u;
+  if n<>(select count(distinct x) from unnest(p_invs) x) then raise exception 'Предмет не найден'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  roll:=random(); win:=roll<ch;
+  delete from fd_inventory where id=any(p_invs) and user_id=u;
+  update fd_players set ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u;
+  if win then insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv; end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv);
+end $$;
+revoke execute on function public.fd_upgrade_many(bigint[],text) from public, anon;
+grant execute on function public.fd_upgrade_many(bigint[],text) to authenticated;
+
 -- Как дать админку: впиши почту и запусти отдельно
 -- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
 
@@ -501,7 +528,7 @@ function caseArt(c){
 
 /* ---------- state ---------- */
 let ITEMS={},CASES=[],CI={},ME=null,INV=[],cur=0,busy=false,fast=false,serverOffset=0;
-let from=null,to=null,rot=0;
+let to=null,rot=0;
 
 async function rpc(fn,args){const {data,error}=await sb.rpc(fn,args);if(error)throw new Error(error.message);return data}
 
@@ -640,37 +667,59 @@ $('fastBtn').onclick=()=>{fast=!fast;CFG.fast=fast;try{localStorage.setItem('fd_
 syncFast();
 
 /* ---------- upgrader ---------- */
-function chance(){if(!from||!to)return 0;return Math.min(.95,ITEMS[from.item_id].value/ITEMS[to].value)}
+const MAXSEL=10;let sel=[];
+const selVal=()=>sel.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
+function chance(){if(!sel.length||!to)return 0;return Math.min(.95,selVal()/ITEMS[to].value)}
 function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
-function closestTarget(want){const fv=ITEMS[from.item_id].value;const list=Object.values(ITEMS).filter(i=>i.value>fv);
+function closestTarget(want){const fv=selVal();const list=Object.values(ITEMS).filter(i=>i.value>fv);
   if(!list.length)return null;return list.sort((a,b)=>Math.abs(Math.log(a.value/want))-Math.abs(Math.log(b.value/want)))[0]}
+function toggleSel(x){
+  if(busy)return;const i=sel.findIndex(s=>s.id===x.id);
+  if(i>=0)sel.splice(i,1);else{if(sel.length>=MAXSEL){toast('Максимум '+MAXSEL+' скинов','lose');return}sel.push(x)}
+  if(to&&ITEMS[to].value<=selVal())to=null;renderUpg();
+}
 function renderUpg(){
-  if(from&&!INV.find(x=>x.id===from.id))from=null;
+  sel=sel.filter(s=>INV.find(x=>x.id===s.id));
   const PF=$('pickFrom');PF.innerHTML='';
   if(!INV.length)PF.innerHTML='<div class="empty">Инвентарь пуст. Открой кейс.</div>';
-  INV.forEach(x=>{const e=card(x.item_id);selectable(e,from&&from.id===x.id,()=>{if(busy)return;from=x;if(to&&ITEMS[to].value<=ITEMS[x.item_id].value)to=null;renderUpg()});PF.appendChild(e)});
-  const PT=$('pickTo');PT.innerHTML='';const min=from?ITEMS[from.item_id].value:0;
-  Object.values(ITEMS).filter(i=>i.value>min).sort((a,b)=>a.value-b.value).forEach(i=>{const e=card(i.id,from?`<span class="pct">${(Math.min(.95,min/i.value)*100).toFixed(min/i.value<.1?1:0)}%</span>`:'');selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
-  $('fromSlot').innerHTML=from?'':'<span class="note">Выбери свой предмет</span>';if(from)$('fromSlot').appendChild(card(from.item_id));
+  INV.forEach(x=>{const e=card(x.item_id);selectable(e,!!sel.find(s=>s.id===x.id),()=>toggleSel(x));PF.appendChild(e)});
+  const fv=selVal(),PT=$('pickTo');PT.innerHTML='';
+  Object.values(ITEMS).filter(i=>i.value>fv).sort((a,b)=>a.value-b.value).forEach(i=>{
+    const c=Math.min(.95,fv/i.value)*100;
+    const e=card(i.id,sel.length?`<span class="pct">${c<10?c.toFixed(1):c.toFixed(0)}%</span>`:'');
+    selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
+  const FS=$('fromSlot');FS.innerHTML='';
+  if(!sel.length)FS.innerHTML='<span class="note">Выбери свои скины (можно до 10)</span>';
+  else if(sel.length===1)FS.appendChild(card(sel[0].item_id));
+  else{const w=document.createElement('div');w.className='stack';sel.slice(0,6).forEach(s=>w.appendChild(card(s.item_id)));FS.appendChild(w);
+    const t=document.createElement('div');t.className='stacktotal';t.innerHTML=`${sel.length} скинов на <b>${fmt(fv)}</b> <button class="ghost small" id="clearSel">Сбросить</button>`;FS.appendChild(t);
+    t.querySelector('button').onclick=()=>{if(!busy){sel=[];to=null;renderUpg()}}}
   $('toSlot').innerHTML=to?'':'<span class="note">Выбери цель</span>';if(to)$('toSlot').appendChild(card(to));
   const M=$('mults'),P=$('pcts');M.innerHTML='';P.innerHTML='';
-  if(from){const fv=ITEMS[from.item_id].value;
+  if(sel.length){
     CFG.mults.forEach(m=>{const best=closestTarget(fv*m);if(!best)return;const b=document.createElement('button');b.textContent='x'+m;
       b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(Math.log(best.value/(fv*m)))<.05);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};M.appendChild(b)});
     CFG.pcts.forEach(p=>{const best=closestTarget(fv/(p/100));if(!best)return;const b=document.createElement('button');b.textContent=p+'%';
       b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(chance()*100-p)<1);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};P.appendChild(b)});
   }
   const ch=chance(),L=2*Math.PI*92;$('arc').setAttribute('stroke-dasharray',`${ch*L} ${L}`);
-  $('chanceTxt').textContent=(ch*100).toFixed(1)+'%';$('upBtn').disabled=busy||!from||!to;
+  $('chanceTxt').textContent=(ch*100).toFixed(1)+'%';$('upBtn').disabled=busy||!sel.length||!to;
 }
 $('upBtn').onclick=async()=>{
-  if(busy||!from||!to)return;busy=true;$('upBtn').disabled=true;
-  const f=from,t=to;let res;
-  try{res=await rpc('fd_upgrade',{p_inv:f.id,p_target:t})}catch(e){busy=false;renderUpg();toast(e.message,'lose');return}
+  if(busy||!sel.length||!to)return;busy=true;$('upBtn').disabled=true;
+  const f=sel.slice(),t=to,ids=f.map(x=>x.id);let res;
+  try{
+    try{res=await rpc('fd_upgrade_many',{p_invs:ids,p_target:t})}
+    catch(e){
+      if(!/fd_upgrade_many|schema cache|Could not find/i.test(e.message))throw e;
+      if(ids.length>1)throw new Error('Апгрейд нескольких скинов ещё не включён в базе. Пока выбирай один скин.');
+      res=await rpc('fd_upgrade',{p_inv:ids[0],p_target:t});
+    }
+  }catch(e){busy=false;renderUpg();toast(e.message,'lose');return}
   rot+=360*5+((res.roll*360)-(rot%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
-  setTimeout(()=>{INV=INV.filter(x=>x.id!==f.id);ME.ups++;
-    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');from=INV[0];to=null}
-    else{toast(`Не повезло: ${ITEMS[f.item_id].weapon} | ${ITEMS[f.item_id].skin} сгорел`,'lose');from=null}
+  setTimeout(()=>{INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];
+    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=null}
+    else{toast(f.length>1?`Не повезло: ${f.length} скинов сгорели`:`Не повезло: ${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`,'lose')}
     busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:4100);
 };
 
