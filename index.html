@@ -61,6 +61,16 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .roll::before,.roll::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
 .roll::before{left:0;background:linear-gradient(90deg,#06050a,transparent)}
 .roll::after{right:0;background:linear-gradient(-90deg,#06050a,transparent)}
+.rolls{display:flex;flex-direction:column;gap:8px}
+.rolls.multi .roll{height:132px}
+.rolls.multi .strip{top:3px}
+.seg{display:flex;gap:4px;background:var(--panel2);padding:4px;border-radius:12px;flex-wrap:wrap}
+.seg button{background:transparent;color:var(--muted);padding:7px 12px;border-radius:9px;font-family:var(--mono)}
+.seg button[aria-pressed="true"]{background:var(--pink);color:#fff}
+.seg:empty{display:none}
+.set{display:flex;flex-direction:column;gap:6px;max-width:460px}
+.set label{font-weight:800}
+.drops{display:flex;gap:8px;flex-wrap:wrap}
 .marker{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--pink);z-index:3;box-shadow:0 0 14px var(--pink)}
 
 /* item card */
@@ -151,13 +161,19 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <button role="tab" data-tab="cases" aria-selected="true">Кейсы</button>
     <button role="tab" data-tab="upgrade" aria-selected="false">Апгрейдер</button>
     <button role="tab" data-tab="inv" aria-selected="false">Инвентарь <span id="invCount"></span></button>
+    <button role="tab" data-tab="settings" aria-selected="false">Настройки</button>
     <button role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden>Админка</button>
   </div>
 
   <section class="panel" id="p-cases">
     <div class="cases" id="caseList"></div>
-    <div class="roll"><div class="marker"></div><div class="strip" id="strip"></div></div>
-    <div class="row"><button id="openBtn">Открыть</button><button class="ghost" id="fastBtn" aria-pressed="false">Быстро: выкл</button><span class="note" id="caseHint"></span></div>
+    <div class="rolls" id="rolls"></div>
+    <div class="row">
+      <div class="seg" id="countSeg" role="group" aria-label="Сколько кейсов открыть"></div>
+      <button id="openBtn">Открыть</button>
+      <button class="ghost" id="fastBtn" aria-pressed="false">Быстро: выкл</button>
+      <span class="note" id="caseHint"></span>
+    </div>
     <h3>Содержимое кейса</h3>
     <div class="grid" id="contents"></div>
   </section>
@@ -175,7 +191,12 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
       </div>
       <div class="slot" id="toSlot"></div>
     </div>
-    <div class="row" style="justify-content:center"><div class="row" id="mults"></div><button id="upBtn" disabled>Апгрейд</button></div>
+    <div class="row" style="justify-content:center">
+      <div class="seg" id="mults" aria-label="Множители"></div>
+      <div class="seg" id="pcts" aria-label="Шанс"></div>
+      <button id="upBtn" disabled>Апгрейд</button>
+    </div>
+    <p class="note" style="text-align:center;margin:0">Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
     <div class="cols2">
       <div><h3>Твой предмет</h3><div class="grid pick" id="pickFrom"></div></div>
       <div><h3>Цель</h3><div class="grid pick" id="pickTo"></div></div>
@@ -186,6 +207,25 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <div class="row"><h2>Инвентарь</h2><div class="spacer"></div><span class="note" id="invTotal"></span><button class="ghost small" id="sellAll">Продать всё</button></div>
     <div class="grid" id="invList"></div>
     <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel" id="p-settings" hidden>
+    <h2>Настройки</h2>
+    <div class="set">
+      <label for="setMults">Кнопки множителей в апгрейдере</label>
+      <input id="setMults" placeholder="2, 3, 5, 10">
+      <span class="note">Через запятую, от 1.1 до 1000. Например: 2, 5, 10, 100</span>
+    </div>
+    <div class="set">
+      <label for="setPcts">Кнопки шанса в апгрейдере, %</label>
+      <input id="setPcts" placeholder="75, 50, 25">
+      <span class="note">Через запятую, от 1 до 95. Например: 90, 75, 50, 25, 10</span>
+    </div>
+    <div class="set">
+      <label for="setFast">Быстрое открытие кейсов</label>
+      <div class="row"><input type="checkbox" id="setFast" style="width:auto"><span class="note">Лента крутится 1 секунду вместо 5</span></div>
+    </div>
+    <div class="row"><button id="setSave">Сохранить</button><button class="ghost" id="setReset">Вернуть как было</button></div>
   </section>
 
   <section class="panel" id="p-admin" hidden>
@@ -344,6 +384,46 @@ insert into public.fd_case_items values
 ('pink','deagle_bronze',20),('pink','usp_ice',18),('pink','mp5_candy',16),('pink','m4_pulse',14),('pink','awp_jungle',12),('pink','ak_sakura',9),('pink','deagle_inferno',5),('pink','m4_void',3),('pink','awp_frost',1.5),('pink','ak_dragon',0.6),('pink','knife_fade',0.3),('pink','gloves_pink',0.1),
 ('blade','deagle_inferno',22),('blade','m4_void',20),('blade','awp_frost',18),('blade','ak_dragon',15),('blade','awp_gold',10),('blade','knife_fade',7),('blade','knife_night',4.5),('blade','gloves_pink',2.5),('blade','knife_gold',1);
 
+-- Femboy drop: несколько кейсов за раз + честный шанс апгрейда
+create or replace function public.fd_open_many(p_case text, p_n int) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); c fd_cases; tot numeric; r numeric; it record; pick text; b bigint; inv bigint; v int; res json[]:='{}'; best_v int:=0; k int;
+begin
+  if p_n<1 or p_n>5 then raise exception 'Можно открыть от 1 до 5 кейсов'; end if;
+  select * into c from fd_cases where id=p_case; if c.id is null then raise exception 'Нет такого кейса'; end if;
+  update fd_players set balance=balance-c.price*p_n,opened=opened+p_n where id=u and balance>=c.price*p_n returning balance into b;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  select sum(weight) into tot from fd_case_items where case_id=p_case;
+  for k in 1..p_n loop
+    pick:=null; r:=random()*tot;
+    for it in select item_id,weight from fd_case_items where case_id=p_case order by item_id loop
+      r:=r-it.weight; if r<0 then pick:=it.item_id; exit; end if;
+    end loop;
+    if pick is null then select item_id into pick from fd_case_items where case_id=p_case limit 1; end if;
+    insert into fd_inventory(user_id,item_id) values(u,pick) returning id into inv;
+    select value into v from fd_items where id=pick; best_v:=greatest(best_v,v);
+    res:=res||json_build_object('item',pick,'inv',inv);
+  end loop;
+  update fd_players set best=greatest(best,best_v) where id=u;
+  return json_build_object('drops',array_to_json(res),'balance',b);
+end $$;
+revoke execute on function public.fd_open_many(text,int) from public, anon;
+grant execute on function public.fd_open_many(text,int) to authenticated;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv int; tv int; ch numeric; roll numeric; win boolean; newinv bigint;
+begin
+  select i.value into fv from fd_inventory v join fd_items i on i.id=v.item_id where v.id=p_inv and v.user_id=u;
+  if fv is null then raise exception 'Предмет не найден'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  roll:=random(); win:=roll<ch;
+  delete from fd_inventory where id=p_inv;
+  update fd_players set ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u;
+  if win then insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv; end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv);
+end $$;
+
 -- Как дать админку: впиши почту и запусти отдельно
 -- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
 
@@ -441,8 +521,9 @@ function renderTop(){
   const b=$('bonusBtn');
   if(left<=0){b.disabled=false;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
   $('invCount').textContent=INV.length?`(${INV.length})`:'';
-  const c=CASES[cur];if(c){$('openBtn').disabled=busy||ME.balance<c.price;$('openBtn').textContent='Открыть за '+fmt(c.price);
-  $('caseHint').textContent=ME.balance<c.price?'Не хватает монет: продай предметы или возьми бонус':''}
+  const c=CASES[cur];if(c){const cost=c.price*count;$('openBtn').disabled=busy||ME.balance<cost;
+  $('openBtn').textContent=(count>1?`Открыть ${count} шт. за `:'Открыть за ')+fmt(cost);
+  $('caseHint').textContent=ME.balance<cost?'Не хватает монет: продай предметы, возьми бонус или открой меньше':''}
 }
 setInterval(renderTop,1000);
 
@@ -471,7 +552,7 @@ async function enterApp(){
   $('authView').hidden=true;$('appView').hidden=false;
   try{await loadCatalog();await loadMe();await loadInv();}
   catch(e){toast('Ошибка загрузки: '+e.message,'lose');return}
-  renderCases();fillStrip();renderTop();
+  renderCases();fillStrips();renderTop();
 }
 function showAuth(){$('appView').hidden=true;$('authView').hidden=false;ME=null}
 /* ---------- first-run setup ---------- */
@@ -487,52 +568,98 @@ $('copySql').onclick=async()=>{const t=$('sqlBox');try{await navigator.clipboard
 document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
   if(busy)return;
   document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x===t));
-  ['cases','upgrade','inv','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
-  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();
+  ['cases','upgrade','inv','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
+  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();if(t.dataset.tab==='settings')renderSettings();
 });
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
 
+/* ---------- settings ---------- */
+const DEF={mults:[2,3,5,10],pcts:[75,50,25],fast:false};
+let CFG=Object.assign({},DEF);
+try{const s=JSON.parse(localStorage.getItem('fd_cfg'));if(s)CFG=Object.assign(CFG,s)}catch(e){}
+fast=!!CFG.fast;
+function parseList(str,min,max){return [...new Set(String(str).split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>isFinite(x)&&x>=min&&x<=max))].slice(0,8)}
+function renderSettings(){$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast}
+$('setSave').onclick=()=>{
+  const m=parseList($('setMults').value,1.1,1000),p=parseList($('setPcts').value,1,95);
+  if(!m.length&&!p.length){toast('Впиши хотя бы одно число','lose');return}
+  CFG={mults:m.sort((a,b)=>a-b),pcts:p.sort((a,b)=>b-a),fast:$('setFast').checked};fast=CFG.fast;syncFast();
+  try{localStorage.setItem('fd_cfg',JSON.stringify(CFG))}catch(e){}
+  renderSettings();toast('Настройки сохранены','win');
+};
+$('setReset').onclick=()=>{CFG=Object.assign({},DEF);fast=false;syncFast();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
+function syncFast(){$('fastBtn').setAttribute('aria-pressed',fast);$('fastBtn').textContent='Быстро: '+(fast?'вкл':'выкл')}
+
 /* ---------- cases ---------- */
+let count=1;
+function renderCount(){const S=$('countSeg');S.innerHTML='';
+  [1,2,3,4,5].forEach(n=>{const b=document.createElement('button');b.textContent='x'+n;b.setAttribute('aria-pressed',n===count);
+    b.onclick=()=>{if(busy)return;count=n;renderCount();fillStrips();renderTop()};S.appendChild(b)})}
 function renderCases(){
   const L=$('caseList');L.innerHTML='';
   CASES.forEach((c,i)=>{const b=document.createElement('button');b.className='case';b.setAttribute('aria-pressed',i===cur);
     b.innerHTML=`${caseArt(c)}<span class="nm">${esc(c.name)}</span><span class="price"><span class="coin"></span>${fmt(c.price)}</span>`;
-    b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrip();renderTop()};L.appendChild(b)});
+    b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrips();renderTop()};L.appendChild(b)});
   const list=(CI[CASES[cur].id]||[]).slice(),tot=list.reduce((s,x)=>s+ +x.weight,0);
   const C=$('contents');C.innerHTML='';
   list.sort((a,b)=>ITEMS[b.item_id].value-ITEMS[a.item_id].value).forEach(x=>{const p=x.weight/tot*100;C.appendChild(card(x.item_id,`<span class="pct">${p<1?p.toFixed(2):p.toFixed(1)}%</span>`))});
+  renderCount();
 }
 function randKey(){const l=CI[CASES[cur].id],t=l.reduce((s,x)=>s+ +x.weight,0);let r=Math.random()*t;for(const x of l){if((r-=x.weight)<0)return x.item_id}return l[0].item_id}
 const W=148,WIN_I=42;
-function fillStrip(win){const s=$('strip');s.style.transition='none';s.style.transform='translateX(0)';s.innerHTML='';
-  for(let i=0;i<50;i++)s.appendChild(card(i===WIN_I&&win?win:randKey()))}
-$('openBtn').onclick=async()=>{
-  const c=CASES[cur];if(busy||ME.balance<c.price)return;busy=true;renderTop();
-  let res;try{res=await rpc('fd_open',{p_case:c.id})}catch(e){busy=false;renderTop();toast(e.message,'lose');return}
-  ME.balance=res.balance;fillStrip(res.item);renderTop();
-  const s=$('strip'),box=s.parentElement.clientWidth,off=WIN_I*W+70-box/2+(Math.random()*90-45),dur=fast?1.2:5.5;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{s.style.transition=`transform ${dur}s cubic-bezier(.08,.6,.12,1)`;s.style.transform=`translateX(${-off}px)`}));
-  setTimeout(()=>{INV.unshift({id:res.inv,item_id:res.item});const it=ITEMS[res.item];ME.best=Math.max(ME.best,it.value);ME.opened++;
-    busy=false;renderTop();toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')},dur*1000+150);
-};
-$('fastBtn').onclick=e=>{fast=!fast;e.target.setAttribute('aria-pressed',fast);e.target.textContent='Быстро: '+(fast?'вкл':'выкл')};
+function fillStrips(wins){
+  const R=$('rolls');R.innerHTML='';R.classList.toggle('multi',count>1);
+  for(let k=0;k<count;k++){const roll=document.createElement('div');roll.className='roll';roll.innerHTML='<div class="marker"></div><div class="strip"></div>';
+    const s=roll.lastChild;for(let i=0;i<50;i++)s.appendChild(card(i===WIN_I&&wins?wins[k]:randKey()));R.appendChild(roll)}
+}
+const fillStrip=()=>fillStrips();
+async function openCases(){
+  const c=CASES[cur],n=count;if(busy||ME.balance<c.price*n)return;busy=true;renderTop();
+  let drops,bal;
+  try{
+    try{const r=await rpc('fd_open_many',{p_case:c.id,p_n:n});drops=r.drops;bal=r.balance}
+    catch(e){
+      if(n===1&&/fd_open_many|function|schema cache/i.test(e.message)){const r=await rpc('fd_open',{p_case:c.id});drops=[{item:r.item,inv:r.inv}];bal=r.balance}
+      else if(/fd_open_many|schema cache|Could not find/i.test(e.message))throw new Error('Открытие нескольких кейсов ещё не включено в базе. Пока открывай по одному.');
+      else throw e;
+    }
+  }catch(e){busy=false;renderTop();toast(e.message,'lose');return}
+  ME.balance=bal;fillStrips(drops.map(d=>d.item));renderTop();
+  const dur=fast?1.2:5.5;
+  [...$('rolls').children].forEach(roll=>{const s=roll.lastChild,box=roll.clientWidth,off=WIN_I*W+70-box/2+(Math.random()*90-45);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{s.style.transition=`transform ${dur+Math.random()*.4}s cubic-bezier(.08,.6,.12,1)`;s.style.transform=`translateX(${-off}px)`}))});
+  setTimeout(()=>{
+    let sum=0;drops.forEach(d=>{INV.unshift({id:d.inv,item_id:d.item});const v=ITEMS[d.item].value;sum+=v;ME.best=Math.max(ME.best,v)});ME.opened+=n;
+    busy=false;renderTop();
+    if(n===1){const it=ITEMS[drops[0].item];toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')}
+    else toast(`${n} кейсов: выпало на ${fmt(sum)} (потрачено ${fmt(c.price*n)})`,sum>=c.price*n?'win':'');
+  },dur*1000+600);
+}
+$('openBtn').onclick=openCases;
+$('fastBtn').onclick=()=>{fast=!fast;CFG.fast=fast;try{localStorage.setItem('fd_cfg',JSON.stringify(CFG))}catch(e){}syncFast()};
+syncFast();
 
 /* ---------- upgrader ---------- */
-function chance(){if(!from||!to)return 0;return Math.min(.75,ITEMS[from.item_id].value/ITEMS[to].value*.92)}
+function chance(){if(!from||!to)return 0;return Math.min(.95,ITEMS[from.item_id].value/ITEMS[to].value)}
 function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
+function closestTarget(want){const fv=ITEMS[from.item_id].value;const list=Object.values(ITEMS).filter(i=>i.value>fv);
+  if(!list.length)return null;return list.sort((a,b)=>Math.abs(Math.log(a.value/want))-Math.abs(Math.log(b.value/want)))[0]}
 function renderUpg(){
   if(from&&!INV.find(x=>x.id===from.id))from=null;
   const PF=$('pickFrom');PF.innerHTML='';
   if(!INV.length)PF.innerHTML='<div class="empty">Инвентарь пуст. Открой кейс.</div>';
   INV.forEach(x=>{const e=card(x.item_id);selectable(e,from&&from.id===x.id,()=>{if(busy)return;from=x;if(to&&ITEMS[to].value<=ITEMS[x.item_id].value)to=null;renderUpg()});PF.appendChild(e)});
   const PT=$('pickTo');PT.innerHTML='';const min=from?ITEMS[from.item_id].value:0;
-  Object.values(ITEMS).filter(i=>i.value>min).sort((a,b)=>a.value-b.value).forEach(i=>{const e=card(i.id);selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
+  Object.values(ITEMS).filter(i=>i.value>min).sort((a,b)=>a.value-b.value).forEach(i=>{const e=card(i.id,from?`<span class="pct">${(Math.min(.95,min/i.value)*100).toFixed(min/i.value<.1?1:0)}%</span>`:'');selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
   $('fromSlot').innerHTML=from?'':'<span class="note">Выбери свой предмет</span>';if(from)$('fromSlot').appendChild(card(from.item_id));
   $('toSlot').innerHTML=to?'':'<span class="note">Выбери цель</span>';if(to)$('toSlot').appendChild(card(to));
-  const M=$('mults');M.innerHTML='';
-  if(from)[2,3,5,10].forEach(m=>{const fv=ITEMS[from.item_id].value,t=fv*m;
-    const best=Object.values(ITEMS).filter(i=>i.value>fv).sort((a,b)=>Math.abs(a.value-t)-Math.abs(b.value-t))[0];if(!best)return;
-    const b=document.createElement('button');b.className='ghost small';b.textContent='x'+m;b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};M.appendChild(b)});
+  const M=$('mults'),P=$('pcts');M.innerHTML='';P.innerHTML='';
+  if(from){const fv=ITEMS[from.item_id].value;
+    CFG.mults.forEach(m=>{const best=closestTarget(fv*m);if(!best)return;const b=document.createElement('button');b.textContent='x'+m;
+      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(Math.log(best.value/(fv*m)))<.05);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};M.appendChild(b)});
+    CFG.pcts.forEach(p=>{const best=closestTarget(fv/(p/100));if(!best)return;const b=document.createElement('button');b.textContent=p+'%';
+      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(chance()*100-p)<1);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};P.appendChild(b)});
+  }
   const ch=chance(),L=2*Math.PI*92;$('arc').setAttribute('stroke-dasharray',`${ch*L} ${L}`);
   $('chanceTxt').textContent=(ch*100).toFixed(1)+'%';$('upBtn').disabled=busy||!from||!to;
 }
