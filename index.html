@@ -78,6 +78,12 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .seg:empty{display:none}
 .set{display:flex;flex-direction:column;gap:6px;max-width:460px}
 .set label{font-weight:800}
+.cart{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--pink);border-radius:14px;padding:10px 12px;box-shadow:0 10px 30px #0008;z-index:5}
+.cartinfo{flex:1;min-width:160px;font-size:14px}
+.qty{position:absolute;top:5px;left:5px;display:flex;align-items:center;gap:2px;z-index:2;background:#000b;border-radius:999px;padding:2px}
+.qty button{padding:2px 8px;font-size:13px;border-radius:999px;background:transparent;color:#fff}
+.qty b{font-family:var(--mono);font-size:12px;min-width:16px;text-align:center}
+.item.incart{outline:2px solid var(--pink);outline-offset:-2px}
 .drops{display:flex;gap:8px;flex-wrap:wrap}
 .marker{position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--pink);z-index:3;box-shadow:0 0 14px var(--pink)}
 
@@ -232,6 +238,11 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <div class="seg" id="shopRar"></div>
     <p class="note" style="margin:0">Цена в магазине на 10% выше, чем за скин дают при продаже.</p>
     <div class="grid" id="shopList"></div>
+    <div class="cart" id="cart" hidden>
+      <div class="cartinfo"><b id="cartCount">0</b> скинов на <span class="price"><span class="coin"></span><b id="cartSum">0</b></span></div>
+      <button class="ghost small" id="cartClear">Очистить</button>
+      <button id="cartBuy">Купить всё</button>
+    </div>
   </section>
 
   <section class="panel" id="p-settings" hidden>
@@ -846,15 +857,29 @@ function renderShop(){
   const L=$('shopList');L.innerHTML='';
   if(!list.length)L.innerHTML='<div class="empty">Ничего не нашли</div>';
   list.forEach(i=>{const e=card(i.id);const p=shopPrice(i);e.querySelector('.v').innerHTML=`<span class="coin"></span>${fmt(p)}`;
-    const b=document.createElement('button');b.className='sell up';b.style.left='auto';b.style.right='5px';b.textContent='Купить';b.disabled=ME&&ME.balance<p;
-    b.onclick=()=>buy(i.id,b);e.appendChild(b);L.appendChild(e)});
+    const q=CART[i.id]||0;if(q)e.classList.add('incart');
+    const b=document.createElement('button');b.className='sell up';b.style.left='auto';b.style.right='5px';b.textContent=q?'+1':'В корзину';
+    b.onclick=()=>cartAdd(i.id,1);e.appendChild(b);
+    if(q){const Q=document.createElement('div');Q.className='qty';Q.innerHTML=`<button aria-label="Меньше">−</button><b>${q}</b><button aria-label="Больше">+</button>`;
+      Q.children[0].onclick=()=>cartAdd(i.id,-1);Q.children[2].onclick=()=>cartAdd(i.id,1);e.appendChild(Q)}
+    L.appendChild(e)});
+  renderCart();
 }
-async function buy(id,btn){
-  if(busy)return;btn.disabled=true;
-  try{const r=await rpc('fd_buy',{p_item:id,p_n:1});ME.balance=r.balance;r.ids.forEach(x=>INV.unshift({id:x,item_id:id}));
-    const i=ITEMS[id];toast(`Куплено: ${i.weapon} | ${i.skin}`,'win');renderTop();renderShop()}
-  catch(e){btn.disabled=false;toast(/fd_buy|schema cache|Could not find/i.test(e.message)?'Магазин ещё не включён в базе':e.message,'lose')}
-}
+let CART={};
+function cartAdd(id,d){CART[id]=Math.max(0,Math.min(99,(CART[id]||0)+d));if(!CART[id])delete CART[id];renderShop()}
+function cartTotal(){let n=0,s=0;for(const[id,q]of Object.entries(CART)){n+=q;s+=shopPrice(ITEMS[id])*q}return{n,s}}
+function renderCart(){const{n,s}=cartTotal();$('cart').hidden=!n;$('cartCount').textContent=n;$('cartSum').textContent=fmt(s);
+  const enough=ME&&ME.balance>=s;$('cartBuy').disabled=busy||!enough;$('cartBuy').textContent=enough?'Купить всё':'Не хватает монет'}
+$('cartClear').onclick=()=>{CART={};renderShop()};
+$('cartBuy').onclick=async()=>{
+  const{n,s}=cartTotal();if(busy||!n||ME.balance<s)return;busy=true;renderCart();
+  let bought=0;
+  try{for(const[id,q]of Object.entries(CART)){let left=q;
+      while(left>0){const k=Math.min(10,left);const r=await rpc('fd_buy',{p_item:id,p_n:k});ME.balance=r.balance;r.ids.forEach(x=>INV.unshift({id:x,item_id:id}));left-=k;bought+=k;CART[id]-=k;if(!CART[id])delete CART[id]}}
+    toast(`Куплено ${bought} скинов`,'win')}
+  catch(e){toast((bought?`Куплено ${bought}, дальше ошибка: `:'')+e.message,'lose')}
+  busy=false;renderTop();renderShop();
+};
 $('shopQ').oninput=renderShop;
 [...$('shopSort').children].forEach(b=>b.onclick=()=>{shopSort=b.dataset.s;renderShop()});
 
