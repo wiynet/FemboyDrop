@@ -109,6 +109,7 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .pick .item[aria-pressed="true"]{outline:2px solid var(--pink);outline-offset:-2px}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .cols2>div{min-width:0;display:flex;flex-direction:column;gap:8px}
+.sell.up{right:auto;left:5px;background:#ff3d9acc}
 .sell{position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;border-radius:999px;z-index:2;background:#0009}
 
 /* admin */
@@ -204,6 +205,11 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
       <div class="seg" id="pcts" aria-label="Шанс"></div>
       <button id="upBtn" disabled>Апгрейд</button>
     </div>
+    <div class="row" style="justify-content:center">
+      <button class="ghost small" id="fastUpBtn" aria-pressed="false">Быстро: выкл</button>
+      <button class="ghost small" id="chainBtn" aria-pressed="false">Цепочкой: выкл</button>
+      <span class="note" id="chainHint"></span>
+    </div>
     <p class="note" style="text-align:center;margin:0">Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
     <div class="cols2">
       <div><h3>Твой предмет</h3><div class="grid pick" id="pickFrom"></div></div>
@@ -232,6 +238,14 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
     <div class="set">
       <label for="setFast">Быстрое открытие кейсов</label>
       <div class="row"><input type="checkbox" id="setFast" style="width:auto"><span class="note">Лента крутится 1 секунду вместо 5</span></div>
+    </div>
+    <div class="set">
+      <label for="setFastUp">Быстрый апгрейд</label>
+      <div class="row"><input type="checkbox" id="setFastUp" style="width:auto"><span class="note">Колесо крутится меньше секунды</span></div>
+    </div>
+    <div class="set">
+      <label for="setChain">Апгрейд цепочкой</label>
+      <div class="row"><input type="checkbox" id="setChain" style="width:auto"><span class="note">После выигрыша сразу выбирается новый скин и цель с тем же x или %, остаётся только нажать «Апгрейд» (или Пробел)</span></div>
     </div>
     <div class="row"><button id="setSave">Сохранить</button><button class="ghost" id="setReset">Вернуть как было</button></div>
   </section>
@@ -601,20 +615,20 @@ document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
 
 /* ---------- settings ---------- */
-const DEF={mults:[2,3,5,10],pcts:[75,50,25],fast:false};
+const DEF={mults:[2,3,5,10],pcts:[75,50,25],fast:false,fastUp:false,chain:false};
 let CFG=Object.assign({},DEF);
 try{const s=JSON.parse(localStorage.getItem('fd_cfg'));if(s)CFG=Object.assign(CFG,s)}catch(e){}
 fast=!!CFG.fast;
 function parseList(str,min,max){return [...new Set(String(str).split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>isFinite(x)&&x>=min&&x<=max))].slice(0,8)}
-function renderSettings(){$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast}
+function renderSettings(){$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast;$('setFastUp').checked=!!CFG.fastUp;$('setChain').checked=!!CFG.chain}
 $('setSave').onclick=()=>{
   const m=parseList($('setMults').value,1.1,1000),p=parseList($('setPcts').value,1,95);
   if(!m.length&&!p.length){toast('Впиши хотя бы одно число','lose');return}
-  CFG={mults:m.sort((a,b)=>a-b),pcts:p.sort((a,b)=>b-a),fast:$('setFast').checked};fast=CFG.fast;syncFast();
+  CFG={mults:m.sort((a,b)=>a-b),pcts:p.sort((a,b)=>b-a),fast:$('setFast').checked,fastUp:$('setFastUp').checked,chain:$('setChain').checked};fast=CFG.fast;syncFast();syncUp();
   try{localStorage.setItem('fd_cfg',JSON.stringify(CFG))}catch(e){}
   renderSettings();toast('Настройки сохранены','win');
 };
-$('setReset').onclick=()=>{CFG=Object.assign({},DEF);fast=false;syncFast();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
+$('setReset').onclick=()=>{CFG=Object.assign({},DEF);fast=false;syncFast();syncUp();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
 function syncFast(){$('fastBtn').setAttribute('aria-pressed',fast);$('fastBtn').textContent='Быстро: '+(fast?'вкл':'выкл')}
 
 /* ---------- cases ---------- */
@@ -667,7 +681,20 @@ $('fastBtn').onclick=()=>{fast=!fast;CFG.fast=fast;try{localStorage.setItem('fd_
 syncFast();
 
 /* ---------- upgrader ---------- */
-const MAXSEL=10;let sel=[];
+const MAXSEL=10;let sel=[],lastPick=null;
+const saveCfg=()=>{try{localStorage.setItem('fd_cfg',JSON.stringify(CFG))}catch(e){}};
+function syncUp(){
+  $('fastUpBtn').setAttribute('aria-pressed',!!CFG.fastUp);$('fastUpBtn').textContent='Быстро: '+(CFG.fastUp?'вкл':'выкл');
+  $('chainBtn').setAttribute('aria-pressed',!!CFG.chain);$('chainBtn').textContent='Цепочкой: '+(CFG.chain?'вкл':'выкл');
+  $('chainHint').textContent=CFG.chain?(lastPick?`Следующий: ${lastPick.t==='m'?'x'+lastPick.v:lastPick.v+'%'}`:'Выбери x или %, и после выигрыша он повторится'):'';
+  $('needle').style.transitionDuration=CFG.fastUp?'.8s':'';
+}
+$('fastUpBtn').onclick=()=>{CFG.fastUp=!CFG.fastUp;saveCfg();syncUp()};
+$('chainBtn').onclick=()=>{CFG.chain=!CFG.chain;saveCfg();syncUp()};
+function pickTarget(){if(!lastPick||!sel.length)return null;const fv=selVal();const b=closestTarget(lastPick.t==='m'?fv*lastPick.v:fv/(lastPick.v/100));return b?b.id:null}
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!$('p-upgrade').hidden&&!/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();$('upBtn').click()}});
+function quickUpgrade(x){sel=[x];to=pickTarget();document.querySelector('[data-tab="upgrade"]').click()}
+syncUp();
 const selVal=()=>sel.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
 function chance(){if(!sel.length||!to)return 0;return Math.min(.95,selVal()/ITEMS[to].value)}
 function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
@@ -687,7 +714,7 @@ function renderUpg(){
   Object.values(ITEMS).filter(i=>i.value>fv).sort((a,b)=>a.value-b.value).forEach(i=>{
     const c=Math.min(.95,fv/i.value)*100;
     const e=card(i.id,sel.length?`<span class="pct">${c<10?c.toFixed(1):c.toFixed(0)}%</span>`:'');
-    selectable(e,to===i.id,()=>{if(busy)return;to=i.id;renderUpg()});PT.appendChild(e)});
+    selectable(e,to===i.id,()=>{if(busy)return;to=i.id;lastPick=null;syncUp();renderUpg()});PT.appendChild(e)});
   const FS=$('fromSlot');FS.innerHTML='';
   if(!sel.length)FS.innerHTML='<span class="note">Выбери свои скины (можно до 10)</span>';
   else if(sel.length===1)FS.appendChild(card(sel[0].item_id));
@@ -698,9 +725,9 @@ function renderUpg(){
   const M=$('mults'),P=$('pcts');M.innerHTML='';P.innerHTML='';
   if(sel.length){
     CFG.mults.forEach(m=>{const best=closestTarget(fv*m);if(!best)return;const b=document.createElement('button');b.textContent='x'+m;
-      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(Math.log(best.value/(fv*m)))<.05);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};M.appendChild(b)});
+      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(Math.log(best.value/(fv*m)))<.05);b.onclick=()=>{if(!busy){to=best.id;lastPick={t:'m',v:m};syncUp();renderUpg()}};M.appendChild(b)});
     CFG.pcts.forEach(p=>{const best=closestTarget(fv/(p/100));if(!best)return;const b=document.createElement('button');b.textContent=p+'%';
-      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(chance()*100-p)<1);b.onclick=()=>{if(!busy){to=best.id;renderUpg()}};P.appendChild(b)});
+      b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&Math.abs(chance()*100-p)<1);b.onclick=()=>{if(!busy){to=best.id;lastPick={t:'p',v:p};syncUp();renderUpg()}};P.appendChild(b)});
   }
   const ch=chance(),L=2*Math.PI*92;$('arc').setAttribute('stroke-dasharray',`${ch*L} ${L}`);
   $('chanceTxt').textContent=(ch*100).toFixed(1)+'%';$('upBtn').disabled=busy||!sel.length||!to;
@@ -716,11 +743,11 @@ $('upBtn').onclick=async()=>{
       res=await rpc('fd_upgrade',{p_inv:ids[0],p_target:t});
     }
   }catch(e){busy=false;renderUpg();toast(e.message,'lose');return}
-  rot+=360*5+((res.roll*360)-(rot%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
+  rot+=360*(CFG.fastUp?2:5)+((res.roll*360)-(rot%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
   setTimeout(()=>{INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];
-    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=null}
+    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=CFG.chain?pickTarget():null}
     else{toast(f.length>1?`Не повезло: ${f.length} скинов сгорели`:`Не повезло: ${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`,'lose')}
-    busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:4100);
+    busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:(CFG.fastUp?900:4100));
 };
 
 /* ---------- inventory ---------- */
@@ -728,7 +755,7 @@ async function sell(ids){try{ME.balance=await rpc('fd_sell',{p_ids:ids});INV=INV
 function renderInv(){
   const L=$('invList');L.innerHTML='';
   if(!INV.length)L.innerHTML='<div class="empty">Пока пусто. Открой первый кейс.</div>';
-  INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);L.appendChild(e)});
+  INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);const u=document.createElement('button');u.className='sell up';u.textContent='Апгрейд';u.onclick=()=>quickUpgrade(x);e.appendChild(u);L.appendChild(e)});
   $('invTotal').textContent='Стоимость: '+fmt(INV.reduce((s,x)=>s+ITEMS[x.item_id].value,0));
   $('sellAll').disabled=!INV.length;
   $('stats').innerHTML=`<span>Кейсов открыто: <b>${ME.opened}</b></span><span>Апгрейды: <b>${ME.up_wins}/${ME.ups}</b></span><span>Лучший дроп: <b>${fmt(ME.best)}</b></span>`;
