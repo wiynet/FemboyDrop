@@ -210,7 +210,7 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
       <button class="ghost small" id="chainBtn" aria-pressed="false">Цепочкой: выкл</button>
       <span class="note" id="chainHint"></span>
     </div>
-    <p class="note" style="text-align:center;margin:0">Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
+    <p class="note" style="text-align:center;margin:0">При проигрыше утешительный приз: от 1 до 7% стоимости скинов монетами. Шанс честный: стоимость твоего скина делить на стоимость цели (1000 → 2000 = 50%). Кнопки меняются в «Настройках».</p>
     <div class="cols2">
       <div><h3>Твой предмет</h3><div class="grid pick" id="pickFrom"></div></div>
       <div><h3>Цель</h3><div class="grid pick" id="pickTo"></div></div>
@@ -464,6 +464,28 @@ begin
 end $$;
 revoke execute on function public.fd_upgrade_many(bigint[],text) from public, anon;
 grant execute on function public.fd_upgrade_many(bigint[],text) to authenticated;
+
+-- Femboy drop: утешительный приз при проигрыше в апгрейдере (1–7% от стоимости скинов)
+create or replace function public.fd_upgrade_many(p_invs bigint[], p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv bigint; n int; tv int; ch numeric; roll numeric; win boolean; newinv bigint; comp bigint:=0; b bigint;
+begin
+  if coalesce(array_length(p_invs,1),0)<1 or array_length(p_invs,1)>10 then raise exception 'Выбери от 1 до 10 скинов'; end if;
+  select coalesce(sum(i.value),0), count(*) into fv, n from fd_inventory v join fd_items i on i.id=v.item_id where v.id=any(p_invs) and v.user_id=u;
+  if n<>(select count(distinct x) from unnest(p_invs) x) then raise exception 'Предмет не найден'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  roll:=random(); win:=roll<ch;
+  delete from fd_inventory where id=any(p_invs) and user_id=u;
+  if not win then comp:=greatest(1, round(fv*(0.01+random()*0.06))); end if;
+  update fd_players set balance=balance+comp, ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u returning balance into b;
+  if win then insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv; end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv,'comp',comp,'balance',b);
+end $$;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language sql security definer set search_path=public as $$
+  select public.fd_upgrade_many(array[p_inv], p_target)
+$$;
 
 -- Как дать админку: впиши почту и запусти отдельно
 -- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
@@ -746,7 +768,8 @@ $('upBtn').onclick=async()=>{
   rot+=360*(CFG.fastUp?2:5)+((res.roll*360)-(rot%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
   setTimeout(()=>{INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];
     if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=CFG.chain?pickTarget():null}
-    else{toast(f.length>1?`Не повезло: ${f.length} скинов сгорели`:`Не повезло: ${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`,'lose')}
+    else{const lost=f.length>1?`${f.length} скинов сгорели`:`${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`;
+      if(res.comp>0){ME.balance=res.balance;toast(`Не повезло: ${lost}. Утешительный приз +${fmt(res.comp)}`,'lose')}else toast('Не повезло: '+lost,'lose')}
     busy=false;renderUpg();renderTop()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:(CFG.fastUp?900:4100));
 };
 
