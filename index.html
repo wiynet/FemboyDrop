@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Femboy drop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;600;800&family=Unbounded:wght@600;800&family=Rubik:wght@400;600;800&family=Exo+2:wght@500;700;800&family=Comfortaa:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --bg:#09080f; --panel:#13111d; --panel2:#1c1929; --line:#2c2740; --fg:#f3eefc; --muted:#8e86a8;
   --pink:#ff3d9a; --pink2:#ff8fc8; --violet:#8a5cff; --win:#3ddc97; --lose:#ff4d6d; --metal:#24222e;
-  --display:"Russo One",Impact,system-ui,sans-serif; --body:"Manrope",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --display:"Unbounded",Impact,system-ui,sans-serif; --body:"Rubik",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -257,6 +257,10 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
       <label for="setPcts">Кнопки шанса в апгрейдере, %</label>
       <input id="setPcts" placeholder="75, 50, 25">
       <span class="note">Через запятую, от 1 до 95. Например: 90, 75, 50, 25, 10</span>
+    </div>
+    <div class="set">
+      <label for="setFont">Шрифт</label>
+      <div class="seg" id="setFont"></div>
     </div>
     <div class="set">
       <label for="setFast">Быстрое открытие кейсов</label>
@@ -782,13 +786,23 @@ document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
 });
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
 
+/* ---------- fonts ---------- */
+const FONTS={modern:['Unbounded','Rubik','Современный'],game:['Russo One','Exo 2','Игровой'],classic:['Russo One','Manrope','Классика'],cute:['Comfortaa','Comfortaa','Милый']};
+function applyFont(k){const f=FONTS[k]||FONTS.modern;const r=document.documentElement.style;
+  r.setProperty('--display',`"${f[0]}",Impact,system-ui,sans-serif`);r.setProperty('--body',`"${f[1]}",system-ui,sans-serif`)}
+let FONT='modern';try{FONT=localStorage.getItem('fd_font')||'modern'}catch(e){}
+applyFont(FONT);
+function renderFonts(){const S=$('setFont');S.innerHTML='';
+  Object.entries(FONTS).forEach(([k,f])=>{const b=document.createElement('button');b.textContent=f[2];b.style.fontFamily=`"${f[1]}"`;b.setAttribute('aria-pressed',k===FONT);
+    b.onclick=()=>{FONT=k;applyFont(k);try{localStorage.setItem('fd_font',k)}catch(e){};renderFonts()};S.appendChild(b)})}
+
 /* ---------- settings ---------- */
 const DEF={mults:[2,3,5,10],pcts:[75,50,25],fast:false,fastUp:false,chain:false};
 let CFG=Object.assign({},DEF);
 try{const s=JSON.parse(localStorage.getItem('fd_cfg'));if(s)CFG=Object.assign(CFG,s)}catch(e){}
 fast=!!CFG.fast;
 function parseList(str,min,max){return [...new Set(String(str).split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>isFinite(x)&&x>=min&&x<=max))].slice(0,8)}
-function renderSettings(){$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast;$('setFastUp').checked=!!CFG.fastUp;$('setChain').checked=!!CFG.chain}
+function renderSettings(){renderFonts();$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast;$('setFastUp').checked=!!CFG.fastUp;$('setChain').checked=!!CFG.chain}
 $('setSave').onclick=()=>{
   const m=parseList($('setMults').value,1.1,1000),p=parseList($('setPcts').value,1,95);
   if(!m.length&&!p.length){toast('Впиши хотя бы одно число','lose');return}
