@@ -116,7 +116,7 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .cols2>div{min-width:0;display:flex;flex-direction:column;gap:8px}
 .sell.up{right:auto;left:5px;background:var(--pink);color:var(--on)}
-.sell{position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;border-radius:999px;z-index:2;background:#0009}
+.sell{color:#fff;position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;border-radius:999px;z-index:2;background:#0009}
 
 /* admin */
 .plist{display:flex;flex-direction:column;gap:6px}
@@ -208,6 +208,40 @@ input[type=range]{width:100%;accent-color:var(--pink);padding:0;background:trans
 @media (max-width:1100px){.up2{grid-template-columns:1fr}.feed{position:static;max-height:none}.feedlist{flex-direction:row;overflow-x:auto}.feedlist .item{flex:none;width:150px}}
 @media (max-width:900px){.uptop{grid-template-columns:1fr 1fr}.gauge{grid-column:1/-1;order:-1;max-width:260px}.upbar{grid-template-columns:1fr}.qbtns{justify-content:center}}
 @media (max-width:560px){.uptop{grid-template-columns:1fr 1fr}.upcard{min-height:200px}.upcard .big{height:140px}.upcard .big svg{height:84px}}
+
+.me{display:flex;align-items:center;gap:8px;background:transparent;color:var(--fg);padding:4px 6px;border-radius:999px}
+.me:hover{background:var(--panel2);filter:none}
+.invc{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.prof{display:flex;flex-direction:column;gap:14px}
+.pgrid{display:grid;grid-template-columns:1.2fr 1fr .6fr .6fr;grid-template-areas:"me bal best best" "me bal s1 s2";gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:12px}
+.pc{background:var(--panel2);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.pme{grid-area:me}
+.pbal{grid-area:bal;justify-content:space-between}
+.pbest{grid-area:best}
+#pS1{grid-area:s1}#pS2{grid-area:s2}
+.pbest{min-height:130px;position:relative;overflow:hidden;background:radial-gradient(120% 120% at 100% 50%,#ffc61a33,transparent 60%),var(--panel2)}
+.pmetop{display:flex;gap:14px;align-items:center}
+.ava.big{width:72px;height:72px;font-size:30px;border-radius:14px}
+.pmeinfo{display:flex;flex-direction:column;gap:8px;min-width:0}
+.pmeinfo b{font-size:18px;overflow:hidden;text-overflow:ellipsis}
+.pid{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+.pline{display:flex;justify-content:space-between;gap:10px;background:var(--panel);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--muted)}
+.pline b{color:var(--fg);font-family:var(--mono)}
+.pch{font-weight:800;color:var(--fg)}
+.pbig{display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:34px}
+.pbig .coin{width:22px;height:22px}
+.bigbonus{height:48px;font-size:15px}
+.pbestbody{display:flex;align-items:center;gap:10px;flex:1}
+.pbestbody .item{width:100%;height:110px;background:transparent;border:0}
+.pbestbody .item::before{left:auto;right:-10px;width:180px}
+.pbestbody .item svg{left:auto;right:0;width:62%;height:84px;top:0}
+.psmall{justify-content:space-between}
+.pnum{font-family:var(--mono);font-size:22px;color:var(--pink)}
+.pinv{background:var(--panel);border:1px solid var(--line)}
+.ptabs{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ptab{background:var(--pink);color:var(--on);font-weight:800;padding:8px 14px;border-radius:10px;font-size:14px}
+@media (max-width:900px){.pgrid{grid-template-columns:1fr 1fr;grid-template-areas:"me me" "bal bal" "best best" "s1 s2"}}
+
 @media (max-width:760px){.upg,.cols2{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.needle{transition-duration:.3s}}
 </style>
@@ -250,13 +284,11 @@ input[type=range]{width:100%;accent-color:var(--pink);padding:0;background:trans
       <button role="tab" data-tab="cases" aria-selected="true">Кейсы</button>
       <button role="tab" data-tab="upgrade" aria-selected="false">Апгрейд</button>
       <button role="tab" data-tab="shop" aria-selected="false">Магазин</button>
-      <button role="tab" data-tab="inv" aria-selected="false">Инвентарь <span id="invCount"></span></button>
-      <button role="tab" data-tab="settings" aria-selected="false">Настройки</button>
       <button role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden>Админка</button>
     </nav>
     <div class="spacer"></div>
     <div class="bal"><span class="coin"></span><span id="bal">0</span><button class="small" id="bonusBtn">Бонус</button></div>
-    <div class="me"><span class="ava" id="uAva">F</span><span class="user" id="uName"></span><button class="ghost small" id="logout">Выйти</button></div>
+    <button class="me" id="meBtn" title="Профиль"><span class="ava" id="uAva">F</span><span class="user" id="uName"></span><span class="invc" id="invCount"></span></button>
   </header>
 
   <section class="panel" id="p-cases">
@@ -330,10 +362,40 @@ input[type=range]{width:100%;accent-color:var(--pink);padding:0;background:trans
     </div>
   </section>
 
-  <section class="panel" id="p-inv" hidden>
-    <div class="row"><h2>Инвентарь</h2><div class="spacer"></div><span class="note" id="invTotal"></span><button class="ghost small" id="sellAll">Продать всё</button></div>
-    <div class="grid" id="invList"></div>
-    <div class="stats" id="stats"></div>
+  <section class="prof" id="p-inv" hidden>
+    <div class="pgrid">
+      <div class="pc pme">
+        <div class="pmetop">
+          <span class="ava big" id="pAva">F</span>
+          <div class="pmeinfo"><b id="pName"></b><div class="row"><span class="pid" id="pId">ID</span>
+            <button class="iconbtn" id="pSet" title="Настройки апгрейдера" aria-label="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm8-3.5-.1-1.2 2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2-1.2L15 3h-4l-.5 2.6c-.7.3-1.4.7-2 1.2l-2.4-1-2 3.4 2 1.6L6 12l.1 1.2-2 1.6 2 3.4 2.4-1c.6.5 1.3.9 2 1.2L11 21h4l.5-2.6c.7-.3 1.4-.7 2-1.2l2.4 1 2-3.4-2-1.6z" fill="currentColor"/></svg></button>
+            <button class="iconbtn" id="logout" title="Выйти" aria-label="Выйти"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+        </div>
+        <div class="pline"><span>Игр в кейсах</span><b id="pOpened">0</b></div>
+        <div class="pline"><span>Выигранных апгрейдов</span><b id="pWins">0 / 0</b></div>
+      </div>
+      <div class="pc pbal">
+        <div class="pch">Баланс</div>
+        <div class="pbig"><span id="pBal">0</span><span class="coin"></span></div>
+        <div class="note" id="pInvVal">Скинов на 0</div>
+        <button class="bigbonus" id="pBonus">Забрать бонус</button>
+      </div>
+      <div class="pc pbest" id="pBest">
+        <div class="pch">Лучший дроп</div>
+        <div class="pbestbody" id="pBestBody"><span class="note">Пока нет</span></div>
+      </div>
+      <div class="pc psmall" id="pS1"><div class="pch">Кейсов открыто</div><b class="pnum" id="pOpened2">0</b></div>
+      <div class="pc psmall" id="pS2"><div class="pch">Апгрейдов</div><b class="pnum" id="pUps">0</b></div>
+    </div>
+    <div class="pc pinv">
+      <div class="ptabs">
+        <span class="ptab on">Инвентарь <span id="pInvCount"></span></span>
+        <span class="spacer"></span>
+        <span class="note" id="invTotal"></span>
+        <button class="ghost small" id="sellAll">Продать всё</button>
+      </div>
+      <div class="grid" id="invList"></div>
+    </div>
   </section>
 
   <section class="panel" id="p-shop" hidden>
@@ -352,7 +414,7 @@ input[type=range]{width:100%;accent-color:var(--pink);padding:0;background:trans
   </section>
 
   <section class="panel" id="p-settings" hidden>
-    <h2>Настройки</h2>
+    <div class="row"><button class="ghost small" id="setBack">← К апгрейдеру</button><h2>Настройки апгрейдера</h2></div>
     <div class="set">
       <label for="setMults">Кнопки множителей в апгрейдере</label>
       <input id="setMults" placeholder="2, 3, 5, 10">
@@ -838,7 +900,7 @@ function renderTop(){
   const left=ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
   const b=$('bonusBtn');
   if(left<=0){b.disabled=false;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
-  $('invCount').textContent=INV.length?`(${INV.length})`:'';
+  $('invCount').textContent=INV.length?`${INV.length} шт.`:'';
   const c=CASES[cur];if(c){const cost=c.price*count;$('openBtn').disabled=busy||ME.balance<cost;
   $('openBtn').textContent=(count>1?`Открыть ${count} шт. за `:'Открыть за ')+fmt(cost);
   $('caseHint').textContent=ME.balance<cost?'Не хватает монет: продай предметы, возьми бонус или открой меньше':''}
@@ -883,12 +945,16 @@ $('copySql').onclick=async()=>{const t=$('sqlBox');try{await navigator.clipboard
 })();
 
 /* ---------- tabs ---------- */
-document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>{
+function showTab(name){
   if(busy)return;
-  document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x===t));
-  ['cases','upgrade','inv','shop','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==t.dataset.tab);
-  if(t.dataset.tab==='upgrade')renderUpg();if(t.dataset.tab==='inv')renderInv();if(t.dataset.tab==='admin')adminSearch();if(t.dataset.tab==='settings')renderSettings();if(t.dataset.tab==='shop')renderShop();
-});
+  document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===name));
+  ['cases','upgrade','inv','shop','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==name);
+  if(name==='upgrade')renderUpg();if(name==='inv')renderInv();if(name==='admin')adminSearch();if(name==='settings')renderSettings();if(name==='shop')renderShop();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>showTab(t.dataset.tab));
+$('meBtn').onclick=()=>showTab('inv');
+$('pSet').onclick=()=>showTab('settings');
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
 
 /* ---------- fonts ---------- */
@@ -915,6 +981,7 @@ $('setSave').onclick=()=>{
   try{localStorage.setItem('fd_cfg',JSON.stringify(CFG))}catch(e){}
   renderSettings();toast('Настройки сохранены','win');
 };
+$('setBack').onclick=()=>showTab('upgrade');
 $('setReset').onclick=()=>{CFG=Object.assign({},DEF);fast=false;syncFast();syncUp();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
 function syncFast(){$('fastBtn').setAttribute('aria-pressed',fast);$('fastBtn').textContent='Быстро: '+(fast?'вкл':'выкл')}
 
@@ -978,12 +1045,12 @@ function syncUp(){
 }
 $('fastUpBtn').onclick=()=>{CFG.fastUp=!CFG.fastUp;saveCfg();syncUp()};
 $('chainBtn').onclick=()=>{CFG.chain=!CFG.chain;saveCfg();syncUp()};
-$('upGear').onclick=()=>document.querySelector('[data-tab="settings"]').click();
+$('upGear').onclick=()=>showTab('settings');
 const skinVal=()=>sel.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
 const selVal=()=>skinVal()+balUse;
 function pickTarget(){if(!lastPick||selVal()<=0)return null;const fv=selVal();const b=closestTarget(lastPick.t==='m'?fv*lastPick.v:fv/(lastPick.v/100));return b?b.id:null}
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!$('p-upgrade').hidden&&!/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();$('upBtn').click()}});
-function quickUpgrade(x){sel=[x];balUse=0;to=pickTarget();document.querySelector('[data-tab="upgrade"]').click()}
+function quickUpgrade(x){sel=[x];balUse=0;to=pickTarget();showTab('upgrade')}
 syncUp();
 function chance(){if(selVal()<=0||!to)return 0;return Math.min(.95,selVal()/ITEMS[to].value)}
 function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
@@ -1124,13 +1191,24 @@ $('shopQ').oninput=renderShop;
 /* ---------- inventory ---------- */
 async function sell(ids){try{ME.balance=await rpc('fd_sell',{p_ids:ids});INV=INV.filter(x=>!ids.includes(x.id));renderInv();renderTop()}catch(e){toast(e.message,'lose')}}
 function renderInv(){
+  if(!ME)return;
   const L=$('invList');L.innerHTML='';
-  if(!INV.length)L.innerHTML='<div class="empty">Пока пусто. Открой первый кейс.</div>';
+  if(!INV.length)L.innerHTML='<div class="empty">У вас пока нет предметов</div>';
   INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);const u=document.createElement('button');u.className='sell up';u.textContent='Апгрейд';u.onclick=()=>quickUpgrade(x);e.appendChild(u);L.appendChild(e)});
-  $('invTotal').textContent='Стоимость: '+fmt(INV.reduce((s,x)=>s+ITEMS[x.item_id].value,0));
-  $('sellAll').disabled=!INV.length;
-  $('stats').innerHTML=`<span>Кейсов открыто: <b>${ME.opened}</b></span><span>Апгрейды: <b>${ME.up_wins}/${ME.ups}</b></span><span>Лучший дроп: <b>${fmt(ME.best)}</b></span>`;
+  const tot=INV.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
+  $('invTotal').textContent=INV.length?'Стоимость: '+fmt(tot):'';$('sellAll').disabled=!INV.length;$('pInvCount').textContent=INV.length?`(${INV.length})`:'';
+  $('pName').textContent=ME.username;$('pAva').textContent=(ME.username||'F')[0].toUpperCase();
+  $('pId').textContent='ID '+(ME.uid||'—');
+  $('pBal').textContent=fmt(ME.balance);$('pInvVal').textContent=`Скинов на ${fmt(tot)}`;
+  $('pOpened').textContent=fmt(ME.opened);$('pOpened2').textContent=fmt(ME.opened);
+  $('pWins').textContent=`${fmt(ME.up_wins)} / ${fmt(ME.ups)}`;$('pUps').textContent=fmt(ME.ups);
+  const bestItem=Object.values(ITEMS).filter(i=>i.value<=ME.best).sort((a,b)=>b.value-a.value)[0];
+  const B=$('pBestBody');B.innerHTML='';
+  if(ME.best>0&&bestItem)B.appendChild(card(bestItem.id));else B.innerHTML='<span class="note">Пока нет. Открой кейс!</span>';
+  const left=ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
+  const pb=$('pBonus');pb.disabled=left>0;pb.textContent=left>0?'Бонус через '+Math.ceil(left/60000)+' мин':'Забрать бонус +300';
 }
+$('pBonus').onclick=async()=>{await $('bonusBtn').onclick();renderInv()};
 $('sellAll').onclick=()=>sell(INV.map(x=>x.id));
 
 /* ---------- admin ---------- */
