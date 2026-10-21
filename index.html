@@ -247,7 +247,6 @@ h2,.bigup,.gauge .chance b,.pbig,.case .nm,.pnum{font-weight:700}
 .item .s{font-weight:600}
 .pch,.ptab,.feedhead,.gphead h3,.upcard .ph b{font-weight:600}
 @media (max-width:760px){.upg,.cols2{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){.needle{transition-duration:.3s}}
 </style>
 </head>
 <body>
@@ -808,6 +807,99 @@ grant execute on function public.fd_open(text), public.fd_admin_find(text), publ
 -- тебе удача x2
 update public.fd_players set luck=2 where id=(select id from auth.users where email='wiynet@gmail.com');
 
+-- Femboy drop: исправления багов (можно запускать повторно)
+-- 1) апгрейд: скины сначала удаляются, потом считается шанс — два одновременных запроса больше не дают дюп
+-- 2) открытие пустого кейса даёт понятную ошибку
+-- 3) живая лента, статистика и апгрейд с балансом (если ещё не были созданы)
+
+create or replace function public.fd_recent() returns table(id bigint, item_id text, username text) language sql stable security definer set search_path=public as $$
+  select v.id, v.item_id, p.username from fd_inventory v join fd_players p on p.id=v.user_id order by v.id desc limit 24
+$$;
+create or replace function public.fd_stats() returns json language sql stable security definer set search_path=public as $$
+  select json_build_object('players',(select count(*) from fd_players),'ups',(select coalesce(sum(ups),0) from fd_players))
+$$;
+grant execute on function public.fd_recent(), public.fd_stats() to anon, authenticated;
+
+create or replace function public.fd_open_many(p_case text, p_n int) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); c fd_cases; L numeric; tot numeric; r numeric; it record; pick text; b bigint; inv bigint; v int; res json[]:='{}'; best_v int:=0; k int; vmin numeric;
+begin
+  if u is null then raise exception 'Нужно войти'; end if;
+  if p_n is null or p_n<1 or p_n>5 then raise exception 'Можно открыть от 1 до 5 кейсов'; end if;
+  select * into c from fd_cases where id=p_case; if c.id is null then raise exception 'Нет такого кейса'; end if;
+  select min(i.value) into vmin from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0;
+  if vmin is null then raise exception 'Кейс пуст'; end if;
+  vmin:=greatest(vmin,1);
+  update fd_players set balance=balance-c.price*p_n,opened=opened+p_n where id=u and balance>=c.price*p_n returning balance, luck into b, L;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  L:=coalesce(L,1);
+  -- удача увеличивает вес дорогих скинов: вес * (цена/самый дешёвый)^(удача-1)/2
+  select sum(ci.weight*power(greatest(i.value,1)/vmin,(L-1)/2)) into tot from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0;
+  for k in 1..p_n loop
+    pick:=null; r:=random()*tot;
+    for it in select ci.item_id, ci.weight*power(greatest(i.value,1)/vmin,(L-1)/2) w from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0 order by ci.item_id loop
+      pick:=it.item_id; r:=r-it.w; if r<0 then exit; end if;
+    end loop;
+    insert into fd_inventory(user_id,item_id) values(u,pick) returning id into inv;
+    select value into v from fd_items where id=pick; best_v:=greatest(best_v,v);
+    res:=res||json_build_object('item',pick,'inv',inv);
+  end loop;
+  update fd_players set best=greatest(best,best_v) where id=u;
+  return json_build_object('drops',array_to_json(res),'balance',b);
+end $$;
+
+create or replace function public.fd_upgrade_bal(p_invs bigint[], p_bal bigint, p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv bigint:=0; n int:=0; want int; tv bigint; ch numeric; real_ch numeric; roll numeric; win boolean; newinv bigint; comp text; compinv bigint; L numeric; b bigint;
+begin
+  if u is null then raise exception 'Нужно войти'; end if;
+  p_invs:=coalesce(p_invs,'{}'); p_bal:=coalesce(p_bal,0);
+  if p_bal<0 then raise exception 'Неверная сумма'; end if;
+  want:=(select count(distinct x) from unnest(p_invs) x where x is not null);
+  if want>10 then raise exception 'Можно выбрать до 10 скинов'; end if;
+  if want=0 and p_bal=0 then raise exception 'Выбери скины или сумму баланса'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null then raise exception 'Нет такого скина'; end if;
+  -- удаляем сразу: параллельный запрос с теми же скинами их уже не найдёт
+  if want>0 then
+    with d as (delete from fd_inventory v where v.id=any(p_invs) and v.user_id=u returning v.item_id)
+    select coalesce(sum(i.value),0), count(*) into fv, n from d join fd_items i on i.id=d.item_id;
+    if n<>want then raise exception 'Предмет не найден'; end if;
+  end if;
+  update fd_players set balance=balance-p_bal, ups=ups+1 where id=u and balance>=p_bal returning balance, luck into b, L;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  fv:=fv+p_bal;
+  if tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  real_ch:=least(0.97, ch*coalesce(L,1));
+  win:=random()<real_ch;
+  -- стрелка останавливается в нужной зоне колеса
+  if win then roll:=random()*ch*0.96+ch*0.02; else roll:=ch+random()*(1-ch)*0.96+(1-ch)*0.02; end if;
+  if win then
+    update fd_players set up_wins=up_wins+1, best=greatest(best,tv) where id=u;
+    insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv;
+  else
+    select id into comp from fd_items where value<=fv*0.07 order by random()*value desc limit 1;
+    if comp is not null then insert into fd_inventory(user_id,item_id) values(u,comp) returning id into compinv; end if;
+  end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv,'comp_item',comp,'comp_inv',compinv,'balance',b);
+end $$;
+revoke execute on function public.fd_upgrade_bal(bigint[],bigint,text) from public, anon;
+grant execute on function public.fd_upgrade_bal(bigint[],bigint,text) to authenticated;
+
+-- старые функции апгрейда работают через новую
+create or replace function public.fd_upgrade_many(p_invs bigint[], p_target text) returns json language plpgsql security definer set search_path=public as $$
+begin
+  if coalesce(cardinality(p_invs),0)<1 then raise exception 'Выбери от 1 до 10 скинов'; end if;
+  return fd_upgrade_bal(p_invs, 0, p_target);
+end $$;
+revoke execute on function public.fd_upgrade_many(bigint[],text) from public, anon;
+grant execute on function public.fd_upgrade_many(bigint[],text) to authenticated;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language sql security definer set search_path=public as $$
+  select public.fd_upgrade_many(array[p_inv], p_target)
+$$;
+revoke execute on function public.fd_upgrade(bigint,text) from public, anon;
+grant execute on function public.fd_upgrade(bigint,text) to authenticated;
+
 -- Как дать админку: впиши почту и запусти отдельно
 -- insert into public.fd_admins select id from auth.users where email='почта@gmail.com';
 
@@ -869,8 +961,11 @@ function weapon(it){
     <rect width="200" height="80" fill="url(#s${n})" clip-path="url(#c${n})"/>
     <g fill="none" stroke="#000a" stroke-width="1.2" stroke-linejoin="round">${paint}</g></svg>`;
 }
+const UNKNOWN={weapon:'?',kind:'rifle',skin:'Неизвестный скин',rarity:0,value:0,c1:'#555',c2:'#333',pattern:'grid'};
+const item=id=>ITEMS[id]||UNKNOWN;
+const val=id=>item(id).value;
 function card(id,extra=''){
-  const it=ITEMS[id], d=document.createElement('div');
+  const it=item(id), d=document.createElement('div');
   d.className='item'; d.style.setProperty('--r',RAR[it.rarity]); d.title=RNAME[it.rarity];
   d.innerHTML=`${extra}${weapon(it)}<span class="w">${esc(it.weapon)}</span><span class="s">${esc(it.skin)}</span><span class="v"><span class="coin"></span>${fmt(it.value)}</span>`;
   return d;
@@ -884,30 +979,40 @@ function caseArt(c){
 }
 
 /* ---------- state ---------- */
-let ITEMS={},CASES=[],CI={},ME=null,INV=[],cur=0,busy=false,fast=false,serverOffset=0;
+let ITEMS={},CASES=[],CI={},ME=null,UID=null,INV=[],cur=0,busy=false,fast=false,serverOffset=0;
 let to=null,rot=0;
 
 async function rpc(fn,args){const {data,error}=await sb.rpc(fn,args);if(error)throw new Error(error.message);return data}
 
-async function loadCatalog(){
-  const [a,b,c]=await Promise.all([sb.from('fd_items').select('*'),sb.from('fd_cases').select('*').order('sort'),sb.from('fd_case_items').select('*')]);
-  if(a.error||b.error||c.error)throw new Error((a.error||b.error||c.error).message);
-  ITEMS={};a.data.forEach(i=>ITEMS[i.id]=i);CASES=b.data;CI={};c.data.forEach(x=>(CI[x.case_id]=CI[x.case_id]||[]).push(x));
+// Supabase отдаёт максимум 1000 строк за запрос, поэтому читаем страницами
+async function fetchAll(q){
+  const out=[],P=1000;
+  for(let from=0;;from+=P){const {data,error}=await q().range(from,from+P-1);if(error)throw new Error(error.message);out.push(...data);if(data.length<P)return out}
 }
+async function loadCatalog(){
+  const [a,b,c]=await Promise.all([fetchAll(()=>sb.from('fd_items').select('*').order('id')),fetchAll(()=>sb.from('fd_cases').select('*').order('sort')),fetchAll(()=>sb.from('fd_case_items').select('*').order('case_id').order('item_id'))]);
+  ITEMS={};a.forEach(i=>ITEMS[i.id]=i);CI={};c.forEach(x=>{if(ITEMS[x.item_id])(CI[x.case_id]=CI[x.case_id]||[]).push(x)});
+  CASES=b.filter(x=>CI[x.id]&&CI[x.id].length);if(cur>=CASES.length)cur=0;
+}
+// если в базе появились новые скины, пока страница открыта — подгружаем каталог заново
+async function ensureItems(ids){if(ids.some(id=>id&&!ITEMS[id])){try{await loadCatalog()}catch(e){}}}
 async function loadMe(){ME=await rpc('fd_me');serverOffset=new Date(ME.now)-Date.now();}
-async function loadInv(){const {data,error}=await sb.from('fd_inventory').select('id,item_id').order('id',{ascending:false});if(error)throw error;INV=data}
+async function loadInv(){INV=await fetchAll(()=>sb.from('fd_inventory').select('id,item_id').order('id',{ascending:false}));await ensureItems(INV.map(x=>x.item_id))}
+const bonusLeft=()=>ME&&ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
 
 function renderTop(){
   if(!ME)return;
   $('bal').textContent=fmt(ME.balance);$('uName').textContent=ME.username;$('uAva').textContent=(ME.username||'F')[0].toUpperCase();
   $('adminTab').hidden=!ME.is_admin;
-  const left=ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
+  const left=bonusLeft();
   const b=$('bonusBtn');
-  if(left<=0){b.disabled=false;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
+  if(left<=0){b.disabled=bonusBusy;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
   $('invCount').textContent=INV.length?`${INV.length} шт.`:'';
   const c=CASES[cur];if(c){const cost=c.price*count;$('openBtn').disabled=busy||ME.balance<cost;
   $('openBtn').textContent=(count>1?`Открыть ${count} шт. за `:'Открыть за ')+fmt(cost);
   $('caseHint').textContent=ME.balance<cost?'Не хватает монет: продай предметы, возьми бонус или открой меньше':''}
+  else $('openBtn').disabled=true;
+  if(!$('p-inv').hidden)renderBonus();
 }
 setInterval(renderTop,1000);
 
@@ -927,25 +1032,42 @@ $('authForm').onsubmit=async e=>{
     }else{
       const {error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;
     }
-  }catch(err){$('aErr').textContent=/Invalid login/.test(err.message)?'Неверная почта или пароль':err.message}
+  }catch(err){$('aErr').textContent=authMsg(err.message)}
   $('aBtn').disabled=false;
 };
-$('logout').onclick=()=>sb.auth.signOut();
+function authMsg(m){
+  if(/Invalid login/i.test(m))return 'Неверная почта или пароль';
+  if(/already registered|already exists/i.test(m))return 'Такая почта уже зарегистрирована';
+  if(/not confirmed/i.test(m))return 'Почта не подтверждена: проверь письмо';
+  if(/rate limit|too many/i.test(m))return 'Слишком много попыток, подожди немного';
+  if(/Failed to fetch|NetworkError/i.test(m))return 'Нет связи с сервером';
+  return m;
+}
+$('logout').onclick=()=>{if(!busy)sb.auth.signOut()};
 
-async function enterApp(){
+let entering=false;
+async function enterApp(uid){
+  if(entering||ME)return;entering=true;UID=uid;
   $('authView').hidden=true;$('appView').hidden=false;
   try{await loadCatalog();await loadMe();await loadInv();}
-  catch(e){toast('Ошибка загрузки: '+e.message,'lose');return}
-  renderCases();fillStrips();renderTop();loadStats();loadFeed();
+  catch(e){entering=false;ME=null;toast('Ошибка загрузки: '+e.message,'lose');setTimeout(()=>{if(UID===uid&&!ME)enterApp(uid)},5000);return}
+  entering=false;
+  if(UID!==uid){ // аккаунт сменился, пока грузились
+    ME=null;const {data}=await sb.auth.getSession();if(data.session)enterApp(data.session.user.id);return}
+  renderCases();fillStrips();renderTop();showTab('cases');loadStats();loadFeed();
 }
-function showAuth(){$('appView').hidden=true;$('authView').hidden=false;ME=null}
+function showAuth(){
+  $('appView').hidden=true;$('authView').hidden=false;
+  ME=null;UID=null;INV=[];sel=[];to=null;balUse=0;lastPick=null;CART={};feedIds=new Set();busy=false;
+}
 /* ---------- first-run setup ---------- */
 $('sqlBox').value=$('setupSql').textContent.trim();
 $('copySql').onclick=async()=>{const t=$('sqlBox');try{await navigator.clipboard.writeText(t.value);toast('Код скопирован','win')}catch(e){t.focus();t.select();document.execCommand('copy');toast('Код выделен, нажми Ctrl+C')}};
 (async()=>{
   const {error}=await sb.from('fd_items').select('id').limit(1);
   if(error&&/does not exist|schema cache|Could not find/i.test(error.message)){$('setupView').hidden=false;return}
-  sb.auth.onAuthStateChange((ev,s)=>{if(s){if(!ME)enterApp()}else showAuth()});
+  // вызовы supabase внутри колбэка могут зависнуть, поэтому выносим их через setTimeout
+  sb.auth.onAuthStateChange((ev,s)=>setTimeout(()=>{if(s){if(UID&&UID!==s.user.id)showAuth();enterApp(s.user.id)}else showAuth()},0));
 })();
 
 /* ---------- tabs ---------- */
@@ -959,7 +1081,13 @@ function showTab(name){
 document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>showTab(t.dataset.tab));
 $('meBtn').onclick=()=>showTab('inv');
 $('pSet').onclick=()=>showTab('settings');
-$('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
+let bonusBusy=false;
+$('bonusBtn').onclick=async()=>{
+  if(bonusBusy||!ME||bonusLeft()>0)return;bonusBusy=true;renderTop();
+  try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();toast('+300 монет','win')}
+  catch(e){toast(e.message,'lose');try{await loadMe()}catch(_){}}
+  bonusBusy=false;renderTop();if(!$('p-upgrade').hidden)renderUpg();
+};
 
 /* ---------- fonts ---------- */
 const FONTS={upg:['Montserrat','Montserrat','Как на upgrader'],modern:['Unbounded','Rubik','Современный'],game:['Russo One','Exo 2','Игровой'],classic:['Russo One','Manrope','Классика'],cute:['Comfortaa','Comfortaa','Милый']};
@@ -974,7 +1102,10 @@ function renderFonts(){const S=$('setFont');S.innerHTML='';
 /* ---------- settings ---------- */
 const DEF={mults:[2,3,5,10],pcts:[75,50,25],fast:false,fastUp:false,chain:false};
 let CFG=Object.assign({},DEF);
-try{const s=JSON.parse(localStorage.getItem('fd_cfg'));if(s)CFG=Object.assign(CFG,s)}catch(e){}
+try{const s=JSON.parse(localStorage.getItem('fd_cfg'));if(s&&typeof s==='object')CFG=Object.assign(CFG,s)}catch(e){}
+// защита от испорченных настроек в localStorage
+CFG.mults=Array.isArray(CFG.mults)?CFG.mults.map(Number).filter(x=>isFinite(x)&&x>=1.1&&x<=1000).slice(0,8):DEF.mults.slice();
+CFG.pcts=Array.isArray(CFG.pcts)?CFG.pcts.map(Number).filter(x=>isFinite(x)&&x>=1&&x<=95).slice(0,8):DEF.pcts.slice();
 fast=!!CFG.fast;
 function parseList(str,min,max){return [...new Set(String(str).split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>isFinite(x)&&x>=min&&x<=max))].slice(0,8)}
 function renderSettings(){renderFonts();$('setMults').value=CFG.mults.join(', ');$('setPcts').value=CFG.pcts.join(', ');$('setFast').checked=!!CFG.fast;$('setFastUp').checked=!!CFG.fastUp;$('setChain').checked=!!CFG.chain}
@@ -986,7 +1117,7 @@ $('setSave').onclick=()=>{
   renderSettings();toast('Настройки сохранены','win');
 };
 $('setBack').onclick=()=>showTab('upgrade');
-$('setReset').onclick=()=>{CFG=Object.assign({},DEF);fast=false;syncFast();syncUp();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
+$('setReset').onclick=()=>{CFG=Object.assign({},DEF,{mults:DEF.mults.slice(),pcts:DEF.pcts.slice()});fast=false;syncFast();syncUp();try{localStorage.removeItem('fd_cfg')}catch(e){};renderSettings();toast('Вернул как было')};
 function syncFast(){$('fastBtn').setAttribute('aria-pressed',fast);$('fastBtn').textContent='Быстро: '+(fast?'вкл':'выкл')}
 
 /* ---------- cases ---------- */
@@ -999,21 +1130,22 @@ function renderCases(){
   CASES.forEach((c,i)=>{const b=document.createElement('button');b.className='case';b.setAttribute('aria-pressed',i===cur);
     b.innerHTML=`${caseArt(c)}<span class="nm">${esc(c.name)}</span><span class="price"><span class="coin"></span>${fmt(c.price)}</span>`;
     b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrips();renderTop()};L.appendChild(b)});
+  if(!CASES.length){$('contents').innerHTML='<div class="empty">Кейсов пока нет</div>';renderCount();return}
   const list=(CI[CASES[cur].id]||[]).slice(),tot=list.reduce((s,x)=>s+ +x.weight,0);
   const C=$('contents');C.innerHTML='';
   list.sort((a,b)=>ITEMS[b.item_id].value-ITEMS[a.item_id].value).forEach(x=>{const p=x.weight/tot*100;C.appendChild(card(x.item_id,`<span class="pct">${p<1?p.toFixed(2):p.toFixed(1)}%</span>`))});
   renderCount();
 }
-function randKey(){const l=CI[CASES[cur].id],t=l.reduce((s,x)=>s+ +x.weight,0);let r=Math.random()*t;for(const x of l){if((r-=x.weight)<0)return x.item_id}return l[0].item_id}
+function randKey(){const l=CASES[cur]&&CI[CASES[cur].id];if(!l||!l.length)return null;const t=l.reduce((s,x)=>s+ +x.weight,0);let r=Math.random()*t;for(const x of l){if((r-=x.weight)<0)return x.item_id}return l[0].item_id}
 const W=148,WIN_I=42;
 function fillStrips(wins){
-  const R=$('rolls');R.innerHTML='';R.classList.toggle('multi',count>1);
+  const R=$('rolls');R.innerHTML='';if(!CASES.length)return;R.classList.toggle('multi',count>1);
   for(let k=0;k<count;k++){const roll=document.createElement('div');roll.className='roll';roll.innerHTML='<div class="marker"></div><div class="strip"></div>';
     const s=roll.lastChild;for(let i=0;i<50;i++)s.appendChild(card(i===WIN_I&&wins?wins[k]:randKey()));R.appendChild(roll)}
 }
 const fillStrip=()=>fillStrips();
 async function openCases(){
-  const c=CASES[cur],n=count;if(busy||ME.balance<c.price*n)return;busy=true;renderTop();
+  const c=CASES[cur],n=count;if(busy||!ME||!c||ME.balance<c.price*n)return;busy=true;renderTop();
   let drops,bal;
   try{
     try{const r=await rpc('fd_open_many',{p_case:c.id,p_n:n});drops=r.drops;bal=r.balance}
@@ -1023,14 +1155,17 @@ async function openCases(){
       else throw e;
     }
   }catch(e){busy=false;renderTop();toast(e.message,'lose');return}
+  await ensureItems(drops.map(d=>d.item));
   ME.balance=bal;fillStrips(drops.map(d=>d.item));renderTop();
-  const dur=fast?1.2:5.5;
+  const dur=matchMedia('(prefers-reduced-motion:reduce)').matches?.4:fast?1.2:5.5;
   [...$('rolls').children].forEach(roll=>{const s=roll.lastChild,box=roll.clientWidth,off=WIN_I*W+70-box/2+(Math.random()*90-45);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{s.style.transition=`transform ${dur+Math.random()*.4}s cubic-bezier(.08,.6,.12,1)`;s.style.transform=`translateX(${-off}px)`}))});
+  const me=ME;
   setTimeout(()=>{
-    let sum=0;drops.forEach(d=>{INV.unshift({id:d.inv,item_id:d.item});const v=ITEMS[d.item].value;sum+=v;ME.best=Math.max(ME.best,v)});ME.opened+=n;
+    if(ME!==me)return; // вышли из аккаунта во время прокрутки
+    let sum=0;drops.forEach(d=>{INV.unshift({id:d.inv,item_id:d.item});const v=val(d.item);sum+=v;ME.best=Math.max(ME.best,v)});ME.opened+=n;
     busy=false;renderTop();
-    if(n===1){const it=ITEMS[drops[0].item];toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')}
+    if(n===1){const it=item(drops[0].item);toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')}
     else toast(`${n} кейсов: выпало на ${fmt(sum)} (потрачено ${fmt(c.price*n)})`,sum>=c.price*n?'win':'');
   },dur*1000+600);
 }
@@ -1045,25 +1180,26 @@ function syncUp(){
   $('fastUpBtn').setAttribute('aria-pressed',!!CFG.fastUp);$('fastUpBtn').textContent='Быстро: '+(CFG.fastUp?'вкл':'выкл');
   $('chainBtn').setAttribute('aria-pressed',!!CFG.chain);$('chainBtn').textContent='Цепочкой: '+(CFG.chain?'вкл':'выкл');
   $('chainHint').textContent=CFG.chain?(lastPick?`Следующий: ${lastPick.t==='m'?'x'+lastPick.v:lastPick.v+'%'}`:'Выбери x или %, после выигрыша он повторится'):'';
-  $('needle').style.transitionDuration=CFG.fastUp?'.8s':'';
+  $('needle').style.transitionDuration=spinMs()/1000+'s';
 }
+const spinMs=()=>matchMedia('(prefers-reduced-motion:reduce)').matches?300:CFG.fastUp?800:4000;
 $('fastUpBtn').onclick=()=>{CFG.fastUp=!CFG.fastUp;saveCfg();syncUp()};
 $('chainBtn').onclick=()=>{CFG.chain=!CFG.chain;saveCfg();syncUp()};
 $('upGear').onclick=()=>showTab('settings');
-const skinVal=()=>sel.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
+const skinVal=()=>sel.reduce((s,x)=>s+val(x.item_id),0);
 const selVal=()=>skinVal()+balUse;
 function pickTarget(){if(!lastPick||selVal()<=0)return null;const fv=selVal();const b=closestTarget(lastPick.t==='m'?fv*lastPick.v:fv/(lastPick.v/100));return b?b.id:null}
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!$('p-upgrade').hidden&&!/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();$('upBtn').click()}});
-function quickUpgrade(x){sel=[x];balUse=0;to=pickTarget();showTab('upgrade')}
+function quickUpgrade(x){if(busy)return;sel=[x];balUse=0;to=pickTarget();showTab('upgrade')}
 syncUp();
-function chance(){if(selVal()<=0||!to)return 0;return Math.min(.95,selVal()/ITEMS[to].value)}
+function chance(){if(selVal()<=0||!to||!ITEMS[to])return 0;return Math.min(.95,selVal()/ITEMS[to].value)}
 function selectable(el,on,fn){el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-pressed',on);el.onclick=fn;el.onkeydown=e=>{if(e.key==='Enter')fn()}}
 function closestTarget(want){const fv=selVal();const list=Object.values(ITEMS).filter(i=>i.value>fv);
   if(!list.length)return null;return list.sort((a,b)=>Math.abs(Math.log(a.value/want))-Math.abs(Math.log(b.value/want)))[0]}
 function toggleSel(x){
   if(busy)return;const i=sel.findIndex(s=>s.id===x.id);
   if(i>=0)sel.splice(i,1);else{if(sel.length>=MAXSEL){toast('Максимум '+MAXSEL+' скинов','lose');return}sel.push(x)}
-  if(to&&ITEMS[to].value<=selVal())to=null;renderUpg();
+  if(to&&val(to)<=selVal())to=null;renderUpg();
 }
 const CHEV_DOWN='<svg viewBox="0 0 40 40"><path d="M8 8l12 10 12-10M8 20l12 10 12-10" fill="none" stroke="var(--pink)" stroke-width="5" stroke-linejoin="round"/></svg>';
 const CHEV_UP='<svg viewBox="0 0 40 40"><path d="M8 32l12-10 12 10M8 20l12-10 12 10" fill="none" stroke="var(--violet)" stroke-width="5" stroke-linejoin="round"/></svg>';
@@ -1083,13 +1219,16 @@ function renderTargets(){
 }
 ['tFrom','tTo','tQ'].forEach(id=>$(id).oninput=renderTargets);
 $('tSort').onclick=()=>{tSort=-tSort;$('tSort').textContent=tSort>0?'↑':'↓';renderTargets()};
-$('balRange').oninput=e=>{balUse=+e.target.value;if(to&&ITEMS[to].value<=selVal())to=null;renderUpg()};
+// перерисовка всего апгрейдера тяжёлая, поэтому не чаще раза за кадр
+let rangeRaf=0;
+$('balRange').oninput=e=>{if(busy)return;balUse=+e.target.value;if(rangeRaf)return;rangeRaf=requestAnimationFrame(()=>{rangeRaf=0;if(to&&val(to)<=selVal())to=null;renderUpg()})};
 $('clearSel').onclick=()=>{if(!busy){sel=[];balUse=0;to=null;renderUpg()}};
 function renderUpg(){
   if(!ME)return;
-  sel=sel.filter(s=>INV.find(x=>x.id===s.id));
+  const ids=new Set(INV.map(x=>x.id));sel=sel.filter(s=>ids.has(s.id));
+  if(to&&!ITEMS[to])to=null;
   const maxBal=Math.max(0,Math.min(ME.balance,1e9));if(balUse>maxBal)balUse=maxBal;
-  const R=$('balRange');R.max=maxBal;R.step=maxBal>10000?Math.round(maxBal/1000):1;R.value=balUse;
+  const R=$('balRange');R.max=maxBal;R.step=1;R.value=balUse;R.disabled=busy||!maxBal;
   $('balUse').textContent=fmt(balUse);$('balMax').textContent=`(макс ${fmt(maxBal)})`;
   const PF=$('pickFrom');PF.innerHTML='';
   if(!INV.length)PF.innerHTML='<div class="empty">Инвентарь пуст. Открой кейс или купи скин в магазине.</div>';
@@ -1114,25 +1253,34 @@ function renderUpg(){
   }
   const ch=chance();setArc(ch);
   $('chanceTxt').textContent=(ch*100).toFixed(2)+'%';$('chanceSub').textContent=to?`${fmt(fv)} → ${fmt(ITEMS[to].value)}`:'шанс';
-  $('upBtn').disabled=busy||fv<=0||!to;
+  $('upBtn').disabled=busy||fv<=0||!to||val(to)<=fv;
 }
 $('upBtn').onclick=async()=>{
-  if(busy||selVal()<=0||!to)return;busy=true;$('upBtn').disabled=true;
-  const f=sel.slice(),t=to,ids=f.map(x=>x.id),bal=balUse;let res;
+  if(busy||!ME||selVal()<=0||!to||val(to)<=selVal())return;
+  if(balUse>ME.balance){balUse=ME.balance;renderUpg();return}
+  busy=true;$('upBtn').disabled=true;$('balRange').disabled=true;
+  const f=sel.slice(),t=to,ids=f.map(x=>x.id),bal=balUse,me=ME;let res;
   try{
     if(bal>0)res=await rpc('fd_upgrade_bal',{p_invs:ids,p_bal:bal,p_target:t});
     else{try{res=await rpc('fd_upgrade_many',{p_invs:ids,p_target:t})}
       catch(e){if(!/fd_upgrade_many|schema cache|Could not find/i.test(e.message))throw e;res=await rpc('fd_upgrade',{p_inv:ids[0],p_target:t})}}
-  }catch(e){busy=false;renderUpg();toast(/fd_upgrade_bal|schema cache/i.test(e.message)?'Апгрейд с балансом ещё не включён':e.message,'lose');return}
-  if(res.balance!=null)ME.balance=res.balance;renderTop();
-  const ch=res.chance;const target=res.roll*360-ch*180;
-  rot+=360*(CFG.fastUp?2:5)+(((target-rot)%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
-  setTimeout(()=>{INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];balUse=0;
-    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,ITEMS[t].value);toast(`Успех! ${ITEMS[t].weapon} | ${ITEMS[t].skin}`,'win');sel=[INV[0]];to=CFG.chain?pickTarget():null}
-    else{const lost=(f.length>1?`${f.length} скинов сгорели`:f.length?`${ITEMS[f[0].item_id].weapon} | ${ITEMS[f[0].item_id].skin} сгорел`:'')+(bal?(f.length?' и ':'')+`${fmt(bal)} монет сгорели`:'');
-      if(res.comp_item&&ITEMS[res.comp_item]){const ci=ITEMS[res.comp_item];INV.unshift({id:res.comp_inv,item_id:res.comp_item});toast(`Не повезло: ${lost}. Утешительный приз: ${ci.weapon} | ${ci.skin} (${fmt(ci.value)})`,'lose')}
+  }catch(e){busy=false;renderUpg();toast(/fd_upgrade_bal|schema cache/i.test(e.message)?'Апгрейд с балансом ещё не включён':e.message,'lose');
+    if(/не найден|Не хватает/i.test(e.message)){try{await loadMe();await loadInv();renderUpg();renderTop()}catch(_){}}return}
+  await ensureItems([res.comp_item]);
+  if(res.balance!=null)ME.balance=res.balance;else if(bal)ME.balance-=bal;renderTop();
+  const ch=+res.chance||0,ms=spinMs();const target=(+res.roll||0)*360-ch*180;
+  $('needle').style.transitionDuration=ms/1000+'s';
+  rot+=360*(ms<1000?2:5)+(((target-rot)%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
+  setTimeout(()=>{
+    if(ME!==me)return; // вышли из аккаунта во время прокрутки
+    INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];balUse=0;
+    const it=item(t);
+    if(res.win){INV.unshift({id:res.inv,item_id:t});ME.up_wins++;ME.best=Math.max(ME.best,it.value);toast(`Успех! ${it.weapon} | ${it.skin}`,'win');sel=[INV[0]];to=CFG.chain?pickTarget():null}
+    else{const f0=f.length?item(f[0].item_id):null;
+      const lost=(f.length>1?`${f.length} скинов сгорели`:f0?`${f0.weapon} | ${f0.skin} сгорел`:'')+(bal?(f.length?' и ':'')+`${fmt(bal)} монет сгорели`:'');
+      if(res.comp_item&&res.comp_inv){const ci=item(res.comp_item);INV.unshift({id:res.comp_inv,item_id:res.comp_item});toast(`Не повезло: ${lost}. Утешительный приз: ${ci.weapon} | ${ci.skin} (${fmt(ci.value)})`,'lose')}
       else toast('Не повезло: '+lost,'lose');to=null}
-    busy=false;renderUpg();renderTop();loadFeed()},matchMedia('(prefers-reduced-motion:reduce)').matches?400:(CFG.fastUp?900:4100));
+    busy=false;renderUpg();renderTop();loadFeed();loadStats()},ms+100);
 };
 
 /* ---------- live feed & stats ---------- */
@@ -1140,14 +1288,15 @@ let feedIds=new Set(),feedOk=true;
 async function loadFeed(){
   if(!feedOk||!ME)return;
   const {data,error}=await sb.rpc('fd_recent');
-  if(error){feedOk=false;$('feedBox').hidden=true;return}
+  if(error){if(/fd_recent|schema cache|Could not find/i.test(error.message)){feedOk=false;$('feedBox').hidden=true}return}
+  if(!ME||!Array.isArray(data))return;
   $('feedBox').hidden=false;const F=$('feed');const first=!feedIds.size;F.innerHTML='';
   data.filter(r=>ITEMS[r.item_id]).forEach(r=>{const e=card(r.item_id,`<span class="who"></span>`);e.querySelector('.who').textContent=r.username;
     if(!first&&!feedIds.has(r.id))e.classList.add('fresh');F.appendChild(e)});
   feedIds=new Set(data.map(r=>r.id));
 }
 async function loadStats(){
-  const {data,error}=await sb.rpc('fd_stats');if(error)return;
+  const {data,error}=await sb.rpc('fd_stats');if(error||!data)return;
   $('stats2').hidden=false;$('stPlayers').textContent=fmt(data.players);$('stUps').textContent=fmt(data.ups);
 }
 setInterval(()=>{if(document.visibilityState==='visible'&&ME){loadFeed();loadStats()}},12000);
@@ -1175,13 +1324,13 @@ function renderShop(){
   renderCart();
 }
 let CART={};
-function cartAdd(id,d){CART[id]=Math.max(0,Math.min(99,(CART[id]||0)+d));if(!CART[id])delete CART[id];renderShop()}
-function cartTotal(){let n=0,s=0;for(const[id,q]of Object.entries(CART)){n+=q;s+=shopPrice(ITEMS[id])*q}return{n,s}}
+function cartAdd(id,d){if(busy)return;CART[id]=Math.max(0,Math.min(99,(CART[id]||0)+d));if(!CART[id])delete CART[id];renderShop()}
+function cartTotal(){let n=0,s=0;for(const[id,q]of Object.entries(CART)){if(!ITEMS[id]){delete CART[id];continue}n+=q;s+=shopPrice(ITEMS[id])*q}return{n,s}}
 function renderCart(){const{n,s}=cartTotal();$('cart').hidden=!n;$('cartCount').textContent=n;$('cartSum').textContent=fmt(s);
   const enough=ME&&ME.balance>=s;$('cartBuy').disabled=busy||!enough;$('cartBuy').textContent=enough?'Купить всё':'Не хватает монет'}
-$('cartClear').onclick=()=>{CART={};renderShop()};
+$('cartClear').onclick=()=>{if(busy)return;CART={};renderShop()};
 $('cartBuy').onclick=async()=>{
-  const{n,s}=cartTotal();if(busy||!n||ME.balance<s)return;busy=true;renderCart();
+  const{n,s}=cartTotal();if(busy||!ME||!n||ME.balance<s)return;busy=true;renderCart();
   let bought=0;
   try{for(const[id,q]of Object.entries(CART)){let left=q;
       while(left>0){const k=Math.min(10,left);const r=await rpc('fd_buy',{p_item:id,p_n:k});ME.balance=r.balance;r.ids.forEach(x=>INV.unshift({id:x,item_id:id}));left-=k;bought+=k;CART[id]-=k;if(!CART[id])delete CART[id]}}
@@ -1193,39 +1342,57 @@ $('shopQ').oninput=renderShop;
 [...$('shopSort').children].forEach(b=>b.onclick=()=>{shopSort=b.dataset.s;renderShop()});
 
 /* ---------- inventory ---------- */
-async function sell(ids){try{ME.balance=await rpc('fd_sell',{p_ids:ids});INV=INV.filter(x=>!ids.includes(x.id));renderInv();renderTop()}catch(e){toast(e.message,'lose')}}
+let selling=false;
+async function sell(ids){
+  if(busy||selling||!ids.length)return;selling=true;$('sellAll').disabled=true;
+  const old=ME.balance;
+  try{ME.balance=await rpc('fd_sell',{p_ids:ids});const set=new Set(ids);INV=INV.filter(x=>!set.has(x.id));toast(`Продано на ${fmt(ME.balance-old)}`,'win')}
+  catch(e){toast(e.message,'lose')}
+  selling=false;renderInv();renderTop();
+}
 function renderInv(){
   if(!ME)return;
   const L=$('invList');L.innerHTML='';
   if(!INV.length)L.innerHTML='<div class="empty">У вас пока нет предметов</div>';
-  INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);const u=document.createElement('button');u.className='sell up';u.textContent='Апгрейд';u.onclick=()=>quickUpgrade(x);e.appendChild(u);L.appendChild(e)});
-  const tot=INV.reduce((s,x)=>s+ITEMS[x.item_id].value,0);
-  $('invTotal').textContent=INV.length?'Стоимость: '+fmt(tot):'';$('sellAll').disabled=!INV.length;$('pInvCount').textContent=INV.length?`(${INV.length})`:'';
+  INV.forEach(x=>{const e=card(x.item_id),b=document.createElement('button');b.disabled=selling;b.className='sell';b.textContent='Продать';b.onclick=()=>sell([x.id]);e.appendChild(b);const u=document.createElement('button');u.className='sell up';u.textContent='Апгрейд';u.onclick=()=>quickUpgrade(x);e.appendChild(u);L.appendChild(e)});
+  const tot=INV.reduce((s,x)=>s+val(x.item_id),0);
+  $('invTotal').textContent=INV.length?'Стоимость: '+fmt(tot):'';$('sellAll').disabled=!INV.length||selling;$('pInvCount').textContent=INV.length?`(${INV.length})`:'';
   $('pName').textContent=ME.username;$('pAva').textContent=(ME.username||'F')[0].toUpperCase();
-  $('pId').textContent='ID '+(ME.uid||'—');
+  $('pId').textContent='ID '+(UID?UID.slice(0,8):'—');$('pId').title=UID||'';
   $('pBal').textContent=fmt(ME.balance);$('pInvVal').textContent=`Скинов на ${fmt(tot)}`;
   $('pOpened').textContent=fmt(ME.opened);$('pOpened2').textContent=fmt(ME.opened);
   $('pWins').textContent=`${fmt(ME.up_wins)} / ${fmt(ME.ups)}`;$('pUps').textContent=fmt(ME.ups);
   const bestItem=Object.values(ITEMS).filter(i=>i.value<=ME.best).sort((a,b)=>b.value-a.value)[0];
   const B=$('pBestBody');B.innerHTML='';
   if(ME.best>0&&bestItem)B.appendChild(card(bestItem.id));else B.innerHTML='<span class="note">Пока нет. Открой кейс!</span>';
-  const left=ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(Date.now()+serverOffset):0;
-  const pb=$('pBonus');pb.disabled=left>0;pb.textContent=left>0?'Бонус через '+Math.ceil(left/60000)+' мин':'Забрать бонус +300';
+  renderBonus();
+}
+function renderBonus(){
+  if(!ME)return;$('pBal').textContent=fmt(ME.balance);
+  const left=bonusLeft(),pb=$('pBonus');pb.disabled=left>0||bonusBusy;pb.textContent=left>0?'Бонус через '+Math.ceil(left/60000)+' мин':'Забрать бонус +300';
 }
 $('pBonus').onclick=async()=>{await $('bonusBtn').onclick();renderInv()};
-$('sellAll').onclick=()=>sell(INV.map(x=>x.id));
+$('sellAll').onclick=()=>{
+  if(!INV.length)return;const tot=INV.reduce((s,x)=>s+val(x.item_id),0);
+  if(confirm(`Продать все ${INV.length} скинов за ${fmt(tot)} монет?`))sell(INV.map(x=>x.id));
+};
 
 /* ---------- admin ---------- */
+let adminReq=0;
 async function adminSearch(){
-  const P=$('plist');P.innerHTML='<div class="note">Загрузка…</div>';
-  let rows;try{rows=await rpc('fd_admin_find',{q:$('aq').value.trim()})}catch(e){P.innerHTML='';toast(e.message,'lose');return}
+  const P=$('plist'),my=++adminReq;P.innerHTML='<div class="note">Загрузка…</div>';
+  let rows;try{rows=await rpc('fd_admin_find',{q:$('aq').value.trim()})}catch(e){if(my===adminReq){P.innerHTML='';toast(e.message,'lose')}return}
+  if(my!==adminReq)return; // пришёл ответ на старый поиск
   P.innerHTML='';if(!rows.length)P.innerHTML='<div class="empty">Никого не нашли</div>';
   rows.forEach(r=>{const d=document.createElement('div');d.className='prow';
     d.innerHTML=`<div class="who"><b></b><span></span></div><div class="bl"></div><div class="give"><input type="number" placeholder="Сумма" id="g-${r.id}"><button class="small">Выдать</button></div>`+(r.luck!=null?`<div class="give luck"><span class="note">Удача</span><input type="number" step="0.1" min="0.2" max="5" id="l-${r.id}" value="${+r.luck}"><button class="small ghost">Сохранить</button></div>`:'');
     d.querySelector('b').textContent=r.username;d.querySelector('.who span').textContent=r.email;d.querySelector('.bl').textContent=fmt(r.balance);
-    d.querySelector('button').onclick=async()=>{const v=parseInt(d.querySelector('input').value,10);if(!v){toast('Введи сумму','lose');return}
+    const gb=d.querySelector('button');
+    gb.onclick=async()=>{const v=parseInt(d.querySelector('input').value,10);if(!v){toast('Введи сумму','lose');return}
+      gb.disabled=true;
       try{const nb=await rpc('fd_admin_give',{p_user:r.id,p_amount:v});d.querySelector('.bl').textContent=fmt(nb);d.querySelector('input').value='';
-        toast(`${r.username}: ${v>0?'+':''}${fmt(v)}`,'win');if(ME&&r.username===ME.username){await loadMe();renderTop()}}catch(e){toast(e.message,'lose')}};
+        toast(`${r.username}: ${v>0?'+':''}${fmt(v)}`,'win');if(ME&&r.id===UID){ME.balance=nb;renderTop()}}catch(e){toast(e.message,'lose')}
+      gb.disabled=false};
     const lk=d.querySelector('.luck button');if(lk)lk.onclick=async()=>{const v=parseFloat(d.querySelector('.luck input').value);if(!(v>=0.2&&v<=5)){toast('Удача от 0.2 до 5','lose');return}
       try{const nl=await rpc('fd_admin_luck',{p_user:r.id,p_luck:v});d.querySelector('.luck input').value=+nl;toast(`${r.username}: удача x${+nl}`,'win')}catch(e){toast(e.message,'lose')}};
     P.appendChild(d)});

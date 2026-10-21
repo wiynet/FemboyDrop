@@ -1,330 +1,92 @@
--- Femboy drop: новые скины и пересобранные кейсы
-insert into public.fd_items(id,weapon,kind,skin,rarity,value,c1,c2,pattern) values
-('n_nova_pred','Nova','smg','Predator',0,4,'#5a6b3a','#2a3a1a','camo'),
-('n_mag_storm','MAG-7','smg','Storm',0,4,'#4a6b8a','#2a3a4a','camo'),
-('n_bizon_sand','PP-Bizon','smg','Sand Dashed',0,4,'#c2a878','#7a6440','camo'),
-('n_xm_steel','XM1014','smg','Blue Steel',0,22,'#5a7a9a','#2a3a4a','grid'),
-('n_negev_army','Negev','rifle','Army Sheen',0,6,'#6b6b4a','#3a3a2a','grid'),
-('n_p2k_granite','P2000','pistol','Granite Marbleized',0,15,'#8a8a8a','#3a3a3a','grid'),
-('n_cz_army','CZ75-Auto','pistol','Army Sheen',0,6,'#6b6b4a','#3a3a2a','grid'),
-('n_duals_contr','Dual Berettas','pistol','Contractor',0,4,'#9a8a6a','#4a3a2a','camo'),
-('n_r8_bone','R8 Revolver','deagle','Bone Mask',0,8,'#e8e0c8','#6a6050','grid'),
-('n_mp9_sand','MP9','smg','Sand Dashed',0,4,'#c2a878','#7a6440','camo'),
-('n_scar_sand','SCAR-20','awp','Sand Mesh',0,4,'#c2a878','#7a6440','camo'),
-('n_g3_storm','G3SG1','awp','Desert Storm',0,6,'#b89a6a','#5a4a2a','camo'),
-('n_mp9_star','MP9','smg','Starlight Protector',0,750,'#3d6bff','#ffd65a','waves'),
-('n_xm_tranq','XM1014','smg','Tranquility',0,450,'#3dc8ff','#1a3a4a','waves'),
-('n_nova_hb','Nova','smg','Hyper Beast',0,600,'#3dff9b','#ff3d9a','waves'),
-('n_mag_justice','MAG-7','smg','Justice',0,450,'#ffd65a','#1a1a2a','stripes'),
-('n_p2k_fire','P2000','pistol','Fire Elemental',0,1500,'#ff7a1a','#3a0a00','waves'),
-('n_cz_victoria','CZ75-Auto','pistol','Victoria',0,2250,'#ffd65a','#3d6bff','waves'),
-('n_duals_melon','Dual Berettas','pistol','Melondrama',0,600,'#ff3d6e','#3dff9b','hex'),
-('n_r8_fade','R8 Revolver','deagle','Fade',0,2250,'#ff4fb3','#ffd65a','fade'),
-('n_bizon_anubis','PP-Bizon','smg','Judgement of Anubis',0,1200,'#ffd65a','#1a3a6a','stripes'),
-('n_sawed_kraken','Sawed-Off','smg','The Kraken',0,600,'#3dc8ff','#1a1a3a','waves'),
-('n_negev_power','Negev','rifle','Power Loader',0,300,'#ffb020','#1a1a1a','stripes'),
-('n_glock_noir','Glock-18','pistol','Neo-Noir',0,600,'#ff3db8','#1a1a3a','stripes'),
-('n_usp_noir','USP-S','pistol','Neo-Noir',0,1200,'#ff3db8','#1a1a3a','stripes'),
-('n_ak_asiimov','AK-47','ak','Asiimov',0,9000,'#f2f2f2','#ff7a1a','stripes'),
-('n_ak_blood','AK-47','ak','Bloodsport',0,6000,'#d01020','#f0f0f0','stripes'),
-('n_ak_empress','AK-47','ak','The Empress',0,4500,'#ff3d6e','#ffd65a','waves'),
-('n_awp_breach','AWP','awp','Containment Breach',0,4500,'#9bff3d','#1a1a1a','hex'),
-('n_m4s_coil','M4A1-S','rifle','Golden Coil',0,3000,'#ffd65a','#2a2a2a','waves'),
-('n_deagle_kumi','Desert Eagle','deagle','Kumicho Dragon',0,1500,'#d01020','#ffd65a','waves'),
-('n_p250_asii','P250','pistol','Asiimov',0,750,'#f2f2f2','#ff7a1a','stripes'),
-('n_ak_ch','AK-47','ak','Case Hardened',0,22500,'#3d6bff','#ffd65a','fade'),
-('n_awp_fade','AWP','awp','Fade',0,135000,'#ff4fb3','#ffd65a','fade'),
-('n_m4s_knight','M4A1-S','rifle','Knight',0,120000,'#cfd6e0','#5a6b8a','hex'),
-('n_m4_emperor','M4A4','rifle','The Emperor',0,3750,'#3d6bff','#ffd65a','waves'),
-('n_glock_gd','Glock-18','pistol','Gamma Doppler',0,37500,'#17d67a','#1f5bff','fade'),
-('n_usp_print','USP-S','pistol','Printstream',0,12000,'#f5f5f5','#1a1a1a','stripes'),
-('n_awp_medusa','AWP','awp','Medusa',0,375000,'#3dd2a8','#1a3a3a','waves'),
-('n_m4_poseidon','M4A4','rifle','Poseidon',0,105000,'#3dc8ff','#ffd65a','waves'),
-('n_deagle_koi','Desert Eagle','deagle','Golden Koi',0,4500,'#ffd65a','#ff7a1a','hex'),
-('n_ak_arab','AK-47','ak','Gold Arabesque',0,300000,'#ffd65a','#1a1a1a','grid'),
-('n_flip_dop','★ Flip Knife','butterfly','Doppler',0,52500,'#8a3dff','#ff3d9a','fade'),
-('n_gut_fade','★ Gut Knife','butterfly','Fade',0,22500,'#ff4fb3','#ffd65a','fade'),
-('n_navaja_web','★ Navaja Knife','butterfly','Crimson Web',0,13500,'#d01020','#1a0004','grid'),
-('n_shadow_mf','★ Shadow Daggers','butterfly','Marble Fade',0,37500,'#ff3d3d','#3d6bff','fade'),
-('n_bayo_dop','★ Bayonet','butterfly','Doppler',0,75000,'#8a3dff','#ff3d9a','fade'),
-('n_talon_fade','★ Talon Knife','karambit','Fade',0,180000,'#ff4fb3','#ffd65a','fade'),
-('n_skel_fade','★ Skeleton Knife','butterfly','Fade',0,150000,'#ff4fb3','#ffd65a','fade'),
-('n_hunts_tt','★ Huntsman Knife','butterfly','Tiger Tooth',0,52500,'#ffb020','#5a3000','stripes'),
-('n_bowie_sl','★ Bowie Knife','butterfly','Slaughter',0,45000,'#ff3d6e','#ffd0d8','waves'),
-('n_ursus_fade','★ Ursus Knife','butterfly','Fade',0,60000,'#ff4fb3','#ffd65a','fade'),
-('n_driver_snow','★ Driver Gloves','gloves','Snow Leopard',0,60000,'#e8e8e0','#3a3a3a','hex'),
-('n_wraps_sl','★ Hand Wraps','gloves','Slaughter',0,45000,'#ff3d6e','#ffd0d8','waves'),
-('n_moto_turtle','★ Moto Gloves','gloves','Turtle',0,22500,'#3a6b4a','#1a2a1a','hex'),
-('n_hydra_em','★ Hydra Gloves','gloves','Emerald',0,22500,'#17d67a','#003a1c','hex'),
-('n_blood_char','★ Bloodhound Gloves','gloves','Charred',0,18000,'#3a3a3a','#ff7a1a','hex')
-on conflict (id) do nothing;
-update public.fd_items set rarity=case when weapon like '★%' then 6 when value>=15000 then 5 when value>=3000 then 4 when value>=600 then 3 when value>=150 then 2 when value>=30 then 1 else 0 end;
-delete from public.fd_case_items;
-insert into public.fd_cases(id,name,price,color,sort) values
-('poor','Нищий',15,'#8994a3',1),
-('cute','Милый',92,'#ff7ab8',2),
-('pink','Розовый',520.0,'#ff4fb3',3),
-('femboy','Фембой',1200.0,'#b06cff',4),
-('army','Армейский',5200.0,'#6b8a4a',5),
-('blade','Ножевой',60800.0,'#ffd65a',8),
-('elite','Элитный',15200.0,'#4be0ff',6),
-('royal','Королевский',52900.0,'#ffb020',7),
-('god','Божественный',121000.0,'#ff3d6e',9),
-('legend','Легендарный',265000.0,'#ff8a3d',10),
-('mythic','Мифический',462000.0,'#c03dff',11),
-('absolute','Абсолютный',1027000.0,'#ffd65a',12)
-on conflict (id) do update set name=excluded.name,price=excluded.price,color=excluded.color,sort=excluded.sort;
-insert into public.fd_case_items(case_id,item_id,weight) values
-('poor','n_bizon_sand',227.910894),
-('poor','n_nova_pred',227.910894),
-('poor','p250_sand',176.326899),
-('poor','n_negev_army',142.975010),
-('poor','s02',102.702399),
-('poor','m4_steel',49.845864),
-('poor','usp_dust',49.845864),
-('poor','s05',7.830935),
-('poor','famas_wave',3.528817),
-('poor','s32',2.213728),
-('poor','s03',1.590174),
-('poor','s12',1.590174),
-('poor','m4s_azure',0.997562),
-('poor','s06',0.997562),
-('poor','s26',0.835509),
-('poor','n_sawed_kraken',0.716572),
-('poor','n_mp9_star',0.554388),
-('poor','s35',0.554388),
-('poor','m4_void',0.322906),
-('poor','m4_pulse',0.249821),
-('poor','s24',0.249821),
-('poor','scout_mint',0.249821),
-('cute','ak_rust',413.080834),
-('cute','s10',413.080834),
-('cute','p250_blossom',64.896241),
-('cute','mp5_candy',29.243883),
-('cute','awp_kitty',13.178032),
-('cute','s08',13.178032),
-('cute','s22',13.178032),
-('cute','s01',8.266956),
-('cute','s26',6.923996),
-('cute','s09',5.938354),
-('cute','n_p250_asii',4.594302),
-('cute','awp_jungle',3.725299),
-('cute','n_usp_noir',2.675972),
-('cute','s24',2.070308),
-('cute','scout_mint',2.070308),
-('cute','s23',1.298764),
-('cute','deagle_neon',0.932933),
-('cute','n_ak_empress',0.585256),
-('cute','ak_galaxy',0.420403),
-('cute','s33',0.325252),
-('cute','n_usp_print',0.189444),
-('cute','s45',0.146567),
-('pink','mac10_lime',369.673698),
-('pink','famas_wave',172.458878),
-('pink','awp_kitty',80.454912),
-('pink','s08',80.454912),
-('pink','s25',80.454912),
-('pink','s06',51.505330),
-('pink','n_nova_hb',37.533543),
-('pink','n_mp9_star',29.364226),
-('pink','s46',29.364226),
-('pink','n_usp_noir',17.510017),
-('pink','s24',13.698896),
-('pink','s21',11.209499),
-('pink','s27',8.769709),
-('pink','s38',6.390761),
-('pink','n_deagle_koi',4.091214),
-('pink','s48',2.981395),
-('pink','n_usp_print',1.390870),
-('pink','s45',1.088142),
-('pink','n_hydra_em',0.696603),
-('pink','n_shadow_mf',0.397147),
-('pink','n_flip_dop',0.274290),
-('pink','s47',0.236821),
-('femboy','awp_kitty',172.914832),
-('femboy','s08',172.914832),
-('femboy','s25',172.914832),
-('femboy','s15',112.963054),
-('femboy','n_nova_hb',83.512359),
-('femboy','n_mp9_star',66.068620),
-('femboy','s46',66.068620),
-('femboy','n_usp_noir',40.333811),
-('femboy','s30',31.909040),
-('femboy','ak_cotton',20.845769),
-('femboy','s50',20.845769),
-('femboy','ak_dragon',12.192050),
-('femboy','s31',10.067843),
-('femboy','deagle_inferno',5.888372),
-('femboy','s29',3.594755),
-('femboy','m4s_blood',2.348407),
-('femboy','n_moto_turtle',1.857881),
-('femboy','awp_nebula',0.897297),
-('femboy','n_hunts_tt',0.763207),
-('femboy','n_bayo_dop',0.524802),
-('femboy','ak_emperor',0.320383),
-('femboy','n_skel_fade',0.253463),
-('army','m4_void',188.614174),
-('army','n_deagle_kumi',149.217175),
-('army','s30',149.217175),
-('army','s21',123.219234),
-('army','s23',97.481677),
-('army','deagle_neon',72.067145),
-('army','n_m4_emperor',57.014038),
-('army','s31',47.080546),
-('army','s48',34.806137),
-('army','n_ak_asiimov',22.738405),
-('army','n_navaja_web',14.854710),
-('army','s45',13.298995),
-('army','n_gut_fade',8.688064),
-('army','gloves_pink',5.081382),
-('army','n_bowie_sl',4.196058),
-('army','n_hunts_tt',3.569007),
-('army','s47',3.102100),
-('army','knife_fade',1.723717),
-('army','n_m4s_knight',1.498216),
-('army','n_skel_fade',1.185274),
-('army','karambit_emerald',0.774324),
-('army','n_ak_arab',0.572450),
-('blade','n_navaja_web',266.268190),
-('blade','n_gut_fade',144.245006),
-('blade','n_hydra_em',144.245006),
-('blade','gloves_pink',78.141598),
-('blade','n_bowie_sl',62.786286),
-('blade','n_wraps_sl',62.786286),
-('blade','n_hunts_tt',52.182952),
-('blade','n_ursus_fade',44.456811),
-('blade','gloves_sport',34.013106),
-('blade','knife_fade',22.713949),
-('blade','gloves_lux',16.800387),
-('blade','knife_m9_pink',16.800387),
-('blade','knife_gold',11.895777),
-('blade','butterfly_sapphire',9.101245),
-('blade','karambit_emerald',9.101245),
-('blade','m9_crimson',6.444279),
-('blade','butterfly_ruby',4.930402),
-('blade','gloves_dragon',4.930402),
-('blade','gloves_femboy',3.961547),
-('blade','karambit_galaxy',1.914146),
-('blade','karambit_crystal',1.220962),
-('blade','gloves_crown',1.060033),
-('elite','awp_gold',195.722683),
-('elite','s38',195.722683),
-('elite','n_awp_breach',130.481788),
-('elite','ak_galaxy',97.861341),
-('elite','s48',97.861341),
-('elite','n_ak_asiimov',65.240894),
-('elite','s29',48.930671),
-('elite','s44',39.144537),
-('elite','n_ak_ch',26.096358),
-('elite','n_moto_turtle',26.096358),
-('elite','n_glock_gd',15.657815),
-('elite','n_wraps_sl',13.048179),
-('elite','n_hunts_tt',11.184153),
-('elite','s42',9.786134),
-('elite','deagle_gold',6.524089),
-('elite','n_m4_poseidon',5.592077),
-('elite','gloves_lux',4.349393),
-('elite','knife_gold',3.262045),
-('elite','karambit_emerald',2.609636),
-('elite','m9_crimson',1.957227),
-('elite','gloves_dragon',1.565781),
-('elite','gloves_femboy',1.304818),
-('royal','n_usp_print',170.416150),
-('royal','awp_femboy',136.332920),
-('royal','s45',136.332920),
-('royal','n_ak_ch',90.888613),
-('royal','n_hydra_em',90.888613),
-('royal','gloves_pink',54.533168),
-('royal','n_shadow_mf',54.533168),
-('royal','n_wraps_sl',45.444307),
-('royal','n_hunts_tt',38.952263),
-('royal','n_ursus_fade',34.083230),
-('royal','gloves_sport',27.266584),
-('royal','deagle_gold',22.722153),
-('royal','n_m4_poseidon',19.476131),
-('royal','n_m4s_knight',17.041615),
-('royal','n_awp_fade',15.148102),
-('royal','n_talon_fade',11.361077),
-('royal','karambit_emerald',9.088861),
-('royal','m9_crimson',6.816646),
-('royal','m9_rainbow',6.196951),
-('royal','n_awp_medusa',5.453317),
-('royal','gloves_femboy',4.544431),
-('royal','karambit_galaxy',2.478780),
-('god','gloves_pink',124.591829),
-('god','n_shadow_mf',124.591829),
-('god','n_bowie_sl',103.826524),
-('god','s43',103.826524),
-('god','n_driver_snow',77.869893),
-('god','s42',77.869893),
-('god','gloves_sport',62.295915),
-('god','deagle_gold',51.913262),
-('god','knife_night',44.497082),
-('god','ak_emperor',38.934947),
-('god','gloves_lux',34.608841),
-('god','n_skel_fade',31.147957),
-('god','n_talon_fade',25.956631),
-('god','karambit_emerald',20.765305),
-('god','karambit_ruby',17.304421),
-('god','n_ak_arab',15.573979),
-('god','butterfly_ruby',12.459183),
-('god','n_awp_medusa',12.459183),
-('god','karambit_blackpearl',6.921768),
-('god','karambit_galaxy',5.663265),
-('god','ak_cosmos',3.460884),
-('god','gloves_crown',3.460884),
-('legend','deagle_gold',113.837685),
-('legend','knife_night',97.575159),
-('legend','n_m4_poseidon',97.575159),
-('legend','n_m4s_knight',85.378264),
-('legend','gloves_lux',75.891790),
-('legend','n_awp_fade',75.891790),
-('legend','n_skel_fade',68.302611),
-('legend','n_talon_fade',56.918843),
-('legend','butterfly_sapphire',45.535074),
-('legend','s39',45.535074),
-('legend','karambit_ruby',37.945895),
-('legend','n_ak_arab',34.151306),
-('legend','m9_rainbow',31.046641),
-('legend','gloves_dragon',27.321044),
-('legend','n_awp_medusa',27.321044),
-('legend','gloves_femboy',22.767537),
-('legend','karambit_blackpearl',15.178358),
-('legend','karambit_galaxy',12.418657),
-('legend','karambit_crystal',8.537826),
-('legend','butterfly_void',7.589179),
-('legend','gloves_crown',7.589179),
-('legend','awp_femgod',5.691884),
-('mythic','knife_gold',99.072323),
-('mythic','n_talon_fade',99.072323),
-('mythic','butterfly_sapphire',79.257858),
-('mythic','karambit_emerald',79.257858),
-('mythic','s39',79.257858),
-('mythic','karambit_ruby',66.048215),
-('mythic','m9_crimson',59.443394),
-('mythic','n_ak_arab',59.443394),
-('mythic','m9_rainbow',54.039449),
-('mythic','butterfly_ruby',47.554715),
-('mythic','gloves_dragon',47.554715),
-('mythic','butterfly_diamond',39.628929),
-('mythic','gloves_femboy',39.628929),
-('mythic','karambit_blackpearl',26.419286),
-('mythic','m4_angel',26.419286),
-('mythic','karambit_galaxy',21.615780),
-('mythic','karambit_crystal',14.860848),
-('mythic','ak_cosmos',13.209643),
-('mythic','butterfly_void',13.209643),
-('mythic','gloves_crown',13.209643),
-('mythic','awp_crown',11.888679),
-('mythic','awp_femgod',9.907232),
-('absolute','butterfly_diamond',163.308714),
-('absolute','gloves_femboy',163.308714),
-('absolute','karambit_blackpearl',113.377591),
-('absolute','m4_angel',113.377591),
-('absolute','karambit_galaxy',94.643778),
-('absolute','karambit_crystal',67.551889),
-('absolute','ak_cosmos',60.757547),
-('absolute','butterfly_void',60.757547),
-('absolute','gloves_crown',60.757547),
-('absolute','awp_crown',55.260968),
-('absolute','awp_femgod',46.898113);
+-- Femboy drop: исправления багов (можно запускать повторно)
+-- 1) апгрейд: скины сначала удаляются, потом считается шанс — два одновременных запроса больше не дают дюп
+-- 2) открытие пустого кейса даёт понятную ошибку
+-- 3) живая лента, статистика и апгрейд с балансом (если ещё не были созданы)
+
+create or replace function public.fd_recent() returns table(id bigint, item_id text, username text) language sql stable security definer set search_path=public as $$
+  select v.id, v.item_id, p.username from fd_inventory v join fd_players p on p.id=v.user_id order by v.id desc limit 24
+$$;
+create or replace function public.fd_stats() returns json language sql stable security definer set search_path=public as $$
+  select json_build_object('players',(select count(*) from fd_players),'ups',(select coalesce(sum(ups),0) from fd_players))
+$$;
+grant execute on function public.fd_recent(), public.fd_stats() to anon, authenticated;
+
+create or replace function public.fd_open_many(p_case text, p_n int) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); c fd_cases; L numeric; tot numeric; r numeric; it record; pick text; b bigint; inv bigint; v int; res json[]:='{}'; best_v int:=0; k int; vmin numeric;
+begin
+  if u is null then raise exception 'Нужно войти'; end if;
+  if p_n is null or p_n<1 or p_n>5 then raise exception 'Можно открыть от 1 до 5 кейсов'; end if;
+  select * into c from fd_cases where id=p_case; if c.id is null then raise exception 'Нет такого кейса'; end if;
+  select min(i.value) into vmin from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0;
+  if vmin is null then raise exception 'Кейс пуст'; end if;
+  vmin:=greatest(vmin,1);
+  update fd_players set balance=balance-c.price*p_n,opened=opened+p_n where id=u and balance>=c.price*p_n returning balance, luck into b, L;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  L:=coalesce(L,1);
+  -- удача увеличивает вес дорогих скинов: вес * (цена/самый дешёвый)^(удача-1)/2
+  select sum(ci.weight*power(greatest(i.value,1)/vmin,(L-1)/2)) into tot from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0;
+  for k in 1..p_n loop
+    pick:=null; r:=random()*tot;
+    for it in select ci.item_id, ci.weight*power(greatest(i.value,1)/vmin,(L-1)/2) w from fd_case_items ci join fd_items i on i.id=ci.item_id where ci.case_id=p_case and ci.weight>0 order by ci.item_id loop
+      pick:=it.item_id; r:=r-it.w; if r<0 then exit; end if;
+    end loop;
+    insert into fd_inventory(user_id,item_id) values(u,pick) returning id into inv;
+    select value into v from fd_items where id=pick; best_v:=greatest(best_v,v);
+    res:=res||json_build_object('item',pick,'inv',inv);
+  end loop;
+  update fd_players set best=greatest(best,best_v) where id=u;
+  return json_build_object('drops',array_to_json(res),'balance',b);
+end $$;
+
+create or replace function public.fd_upgrade_bal(p_invs bigint[], p_bal bigint, p_target text) returns json language plpgsql security definer set search_path=public as $$
+declare u uuid:=auth.uid(); fv bigint:=0; n int:=0; want int; tv bigint; ch numeric; real_ch numeric; roll numeric; win boolean; newinv bigint; comp text; compinv bigint; L numeric; b bigint;
+begin
+  if u is null then raise exception 'Нужно войти'; end if;
+  p_invs:=coalesce(p_invs,'{}'); p_bal:=coalesce(p_bal,0);
+  if p_bal<0 then raise exception 'Неверная сумма'; end if;
+  want:=(select count(distinct x) from unnest(p_invs) x where x is not null);
+  if want>10 then raise exception 'Можно выбрать до 10 скинов'; end if;
+  if want=0 and p_bal=0 then raise exception 'Выбери скины или сумму баланса'; end if;
+  select value into tv from fd_items where id=p_target;
+  if tv is null then raise exception 'Нет такого скина'; end if;
+  -- удаляем сразу: параллельный запрос с теми же скинами их уже не найдёт
+  if want>0 then
+    with d as (delete from fd_inventory v where v.id=any(p_invs) and v.user_id=u returning v.item_id)
+    select coalesce(sum(i.value),0), count(*) into fv, n from d join fd_items i on i.id=d.item_id;
+    if n<>want then raise exception 'Предмет не найден'; end if;
+  end if;
+  update fd_players set balance=balance-p_bal, ups=ups+1 where id=u and balance>=p_bal returning balance, luck into b, L;
+  if b is null then raise exception 'Не хватает монет'; end if;
+  fv:=fv+p_bal;
+  if tv<=fv then raise exception 'Цель должна быть дороже'; end if;
+  ch:=least(0.95, fv::numeric/tv);
+  real_ch:=least(0.97, ch*coalesce(L,1));
+  win:=random()<real_ch;
+  -- стрелка останавливается в нужной зоне колеса
+  if win then roll:=random()*ch*0.96+ch*0.02; else roll:=ch+random()*(1-ch)*0.96+(1-ch)*0.02; end if;
+  if win then
+    update fd_players set up_wins=up_wins+1, best=greatest(best,tv) where id=u;
+    insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv;
+  else
+    select id into comp from fd_items where value<=fv*0.07 order by random()*value desc limit 1;
+    if comp is not null then insert into fd_inventory(user_id,item_id) values(u,comp) returning id into compinv; end if;
+  end if;
+  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv,'comp_item',comp,'comp_inv',compinv,'balance',b);
+end $$;
+revoke execute on function public.fd_upgrade_bal(bigint[],bigint,text) from public, anon;
+grant execute on function public.fd_upgrade_bal(bigint[],bigint,text) to authenticated;
+
+-- старые функции апгрейда работают через новую
+create or replace function public.fd_upgrade_many(p_invs bigint[], p_target text) returns json language plpgsql security definer set search_path=public as $$
+begin
+  if coalesce(cardinality(p_invs),0)<1 then raise exception 'Выбери от 1 до 10 скинов'; end if;
+  return fd_upgrade_bal(p_invs, 0, p_target);
+end $$;
+revoke execute on function public.fd_upgrade_many(bigint[],text) from public, anon;
+grant execute on function public.fd_upgrade_many(bigint[],text) to authenticated;
+
+create or replace function public.fd_upgrade(p_inv bigint, p_target text) returns json language sql security definer set search_path=public as $$
+  select public.fd_upgrade_many(array[p_inv], p_target)
+$$;
+revoke execute on function public.fd_upgrade(bigint,text) from public, anon;
+grant execute on function public.fd_upgrade(bigint,text) to authenticated;
