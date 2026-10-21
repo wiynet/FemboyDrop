@@ -338,7 +338,7 @@ input[type=range]{width:100%;accent-color:var(--pink);padding:0;background:trans
 
   <section class="panel" id="p-shop" hidden>
     <div class="row"><h2>Магазин</h2><div class="spacer"></div>
-      <input id="shopQ" placeholder="Поиск: AWP, нож, Сакура…" style="max-width:260px">
+      <input id="shopQ" placeholder="Поиск: AWP, Asiimov, нож…" style="max-width:260px">
       <div class="seg" id="shopSort"><button data-s="asc" aria-pressed="true">Дешевле</button><button data-s="desc" aria-pressed="false">Дороже</button></div>
     </div>
     <div class="seg" id="shopRar"></div>
@@ -1090,7 +1090,7 @@ function renderShop(){
   [...R.children].forEach(b=>b.setAttribute('aria-pressed',+b.dataset.r===shopRar));
   [...$('shopSort').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===shopSort));
   const q=$('shopQ').value.trim().toLowerCase();
-  const list=Object.values(ITEMS).filter(i=>(shopRar<0||i.rarity===shopRar)&&(!q||(i.weapon+' '+i.skin).toLowerCase().includes(q)||(q.includes('нож')&&/нож|керамбит/i.test(i.weapon))))
+  const list=Object.values(ITEMS).filter(i=>(shopRar<0||i.rarity===shopRar)&&(!q||(i.weapon+' '+i.skin).toLowerCase().includes(q)||((q.includes('нож')||q.includes('knife'))&&/★/.test(i.weapon)&&!/gloves|wraps/i.test(i.weapon))||(q.includes('перчат')&&/gloves|wraps/i.test(i.weapon))))
     .sort((a,b)=>shopSort==='asc'?a.value-b.value:b.value-a.value);
   const L=$('shopList');L.innerHTML='';
   if(!list.length)L.innerHTML='<div class="empty">Ничего не нашли</div>';
