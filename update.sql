@@ -1,41 +1,32 @@
--- Femboy drop: живая лента, статистика, апгрейд с балансом
-create or replace function public.fd_recent() returns table(id bigint, item_id text, username text) language sql stable security definer set search_path=public as $$
-  select v.id, v.item_id, p.username from fd_inventory v join fd_players p on p.id=v.user_id order by v.id desc limit 24
-$$;
-create or replace function public.fd_stats() returns json language sql stable security definer set search_path=public as $$
-  select json_build_object('players',(select count(*) from fd_players),'ups',(select coalesce(sum(ups),0) from fd_players))
-$$;
-grant execute on function public.fd_recent(), public.fd_stats() to anon, authenticated;
+-- Femboy drop: цены как в КС + пересчёт редкости и цен кейсов
+update public.fd_items i set value=greatest(3,round(v.usd*150)) from (values
+('AWP','Safari Mesh',0.1),('AWP','Pink DDPAT',6),('AWP','Worm God',1),('AWP','Atheris',2),('AWP','Electric Hive',10),('AWP','Hyper Beast',20),('AWP','Asiimov',100),('AWP','Neo-Noir',15),('AWP','Lightning Strike',300),('AWP','Gungnir',10000),('AWP','Dragon Lore',12000),
+('AK-47','Safari Mesh',0.1),('AK-47','Slate',3),('AK-47','Elite Build',1),('AK-47','Frontside Misty',15),('AK-47','Point Disarray',12),('AK-47','Neon Rider',40),('AK-47','Redline',25),('AK-47','Vulcan',150),('AK-47','Fire Serpent',800),('AK-47','Wild Lotus',9000),
+('★ Karambit','Night',700),('★ Karambit','Tiger Tooth',1200),('★ Karambit','Fade',1800),('★ Karambit','Lore',1500),('★ Karambit','Doppler Black Pearl',4500),('★ Karambit','Doppler Ruby',5500),('★ Karambit','Doppler Sapphire',8000),
+('M4A4','Urban DDPAT',0.1),('M4A4','Evil Daimyo',2),('M4A4','Cyber Security',10),('M4A4','Desolate Space',10),('M4A4','Buzz Kill',8),('M4A4','Asiimov',100),('M4A4','Howl',4500),
+('Desert Eagle','Mudder',0.1),('Desert Eagle','Conspiracy',1),('Desert Eagle','Ocean Drive',20),('Desert Eagle','Code Red',50),('Desert Eagle','Printstream',50),('Desert Eagle','Blaze',600),
+('USP-S','Forest Leaves',0.1),('USP-S','Blueprint',1),('USP-S','Cortex',4),('USP-S','Orion',10),('USP-S','Kill Confirmed',60),
+('FAMAS','Colony',0.05),('FAMAS','Mecha Industries',1),('FAMAS','Eye of Athena',2),('FAMAS','Roll Cage',3),('FAMAS','Commemoration',40),
+('★ Hand Wraps','Cobalt Skulls',250),('★ Moto Gloves','Spearmint',500),('★ Driver Gloves','King Snake',900),('★ Specialist Gloves','Crimson Kimono',3000),('★ Sport Gloves','Vice',2500),('★ Sport Gloves','Pandora''s Box',9000),
+('M4A1-S','Boreal Forest',0.1),('M4A1-S','Decimator',3),('M4A1-S','Hyper Beast',15),('M4A1-S','Printstream',120),('M4A1-S','Hot Rod',400),
+('★ Butterfly Knife','Safari Mesh',700),('★ Butterfly Knife','Crimson Web',1500),('★ Butterfly Knife','Marble Fade',2500),('★ Butterfly Knife','Fade',3000),('★ Butterfly Knife','Gamma Doppler Emerald',9000),
+('P250','Sand Dune',0.03),('P250','Supernova',0.5),('P250','Muertos',2),('P250','See Ya Later',6),
+('MP5-SD','Dirt Drop',0.03),('MP5-SD','Lab Rats',1),('MP5-SD','Phosphor',2),('MP5-SD','Liquidation',1.5),
+('Glock-18','Groundwater',0.05),('Glock-18','Candy Apple',2),('Glock-18','Water Elemental',5),('Glock-18','Fade',1500),
+('MP7','Skulls',3),('MP7','Nemesis',3.5),('MP7','Bloodsport',5),
+('AUG','Storm',0.05),('AUG','Chameleon',2),('AUG','Akihabara Accept',400),
+('Galil AR','Sage Spray',0.03),('Galil AR','Eco',2),('Galil AR','Chatterbox',30),
+('MAC-10','Candy Apple',0.5),('MAC-10','Disco Tech',3),('MAC-10','Neon Rider',5),
+('P90','Trigon',4),('P90','Death by Kitty',80),('P90','Asiimov',10),
+('SG 553','Pulse',0.5),('SG 553','Cyrex',2),('SG 553','Integrale',100),
+('SSG 08','Acid Fade',10),('SSG 08','Blood in the Water',40),('SSG 08','Dragonfire',50),
+('Tec-9','Toxic',2),('Tec-9','Fuel Injector',15),('Tec-9','Nuclear Threat',300),
+('UMP-45','Carbon Fiber',0.05),('UMP-45','Primal Saber',5),('UMP-45','Blaze',20),
+('★ M9 Bayonet','Crimson Web',900),('★ M9 Bayonet','Marble Fade',2000),('★ M9 Bayonet','Lore',2200),
+('Five-SeveN','Monkey Business',4),('Five-SeveN','Hyper Beast',10)
+) as v(w,s,usd) where i.weapon=v.w and i.skin=v.s;
 
-create or replace function public.fd_upgrade_bal(p_invs bigint[], p_bal bigint, p_target text) returns json language plpgsql security definer set search_path=public as $$
-declare u uuid:=auth.uid(); fv bigint:=0; n int:=0; tv bigint; ch numeric; real_ch numeric; roll numeric; win boolean; newinv bigint; comp text; compinv bigint; L numeric; b bigint;
-begin
-  p_invs:=coalesce(p_invs,'{}'); p_bal:=coalesce(p_bal,0);
-  if p_bal<0 then raise exception 'Неверная сумма'; end if;
-  if cardinality(p_invs)>10 then raise exception 'Можно выбрать до 10 скинов'; end if;
-  if cardinality(p_invs)=0 and p_bal=0 then raise exception 'Выбери скины или сумму баланса'; end if;
-  if cardinality(p_invs)>0 then
-    select coalesce(sum(i.value),0), count(*) into fv, n from fd_inventory v join fd_items i on i.id=v.item_id where v.id=any(p_invs) and v.user_id=u;
-    if n<>(select count(distinct x) from unnest(p_invs) x) then raise exception 'Предмет не найден'; end if;
-  end if;
-  update fd_players set balance=balance-p_bal where id=u and balance>=p_bal returning balance, luck into b, L;
-  if b is null then raise exception 'Не хватает монет'; end if;
-  fv:=fv+p_bal;
-  select value into tv from fd_items where id=p_target;
-  if tv is null or tv<=fv then raise exception 'Цель должна быть дороже'; end if;
-  ch:=least(0.95, fv::numeric/tv);
-  real_ch:=least(0.97, ch*coalesce(L,1));
-  win:=random()<real_ch;
-  if win then roll:=random()*ch*0.96+ch*0.02; else roll:=ch+random()*(1-ch)*0.96+(1-ch)*0.02; end if;
-  if cardinality(p_invs)>0 then delete from fd_inventory where id=any(p_invs) and user_id=u; end if;
-  update fd_players set ups=ups+1, up_wins=up_wins+(case when win then 1 else 0 end), best=case when win then greatest(best,tv) else best end where id=u;
-  if win then
-    insert into fd_inventory(user_id,item_id) values(u,p_target) returning id into newinv;
-  else
-    select id into comp from fd_items where value<=fv*0.07 order by random()*value desc limit 1;
-    if comp is not null then insert into fd_inventory(user_id,item_id) values(u,comp) returning id into compinv; end if;
-  end if;
-  return json_build_object('win',win,'roll',roll,'chance',ch,'inv',newinv,'comp_item',comp,'comp_inv',compinv,'balance',b);
-end $$;
-revoke execute on function public.fd_upgrade_bal(bigint[],bigint,text) from public, anon;
-grant execute on function public.fd_upgrade_bal(bigint[],bigint,text) to authenticated;
+update public.fd_items set rarity=case when weapon like '★%' then 6 when value>=15000 then 5 when value>=3000 then 4 when value>=600 then 3 when value>=150 then 2 when value>=30 then 1 else 0 end;
+
+update public.fd_cases c set price=greatest(5, case when x.p<100 then round(x.p) when x.p<1000 then round(x.p,-1) when x.p<100000 then round(x.p,-2) else round(x.p,-3) end)
+from (select ci.case_id, sum(ci.weight*i.value)/sum(ci.weight)/0.85 p from fd_case_items ci join fd_items i on i.id=ci.item_id group by ci.case_id) x where c.id=x.case_id;
