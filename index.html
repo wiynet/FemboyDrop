@@ -296,7 +296,57 @@ body{background:radial-gradient(900px 420px at 50% -160px,#ffc61a1c,transparent)
 .gauge::before{content:"";position:absolute;inset:14%;border-radius:50%;background:radial-gradient(closest-side,#ffc61a14,transparent);pointer-events:none}
 
 /* тосты */
-.toast{background:#1d1d1dee;backdrop-filter:blur(10px);box-shadow:0 14px 40px #000a;border-radius:14px}
+.toast{background:#1d1d1dee;backdrop-filter:blur(10px);box-shadow:0 14px 40px #000a;border-radius:14px;transition:opacity .25s,transform .45s cubic-bezier(.2,1.5,.4,1)}
+
+/* ---------- анимации ---------- */
+/* появление вкладки и карточек */
+.view-in{animation:viewIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px)}}
+.stagger>.item{animation:cardIn .4s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0)*28ms)}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.96)}}
+/* баланс и шанс */
+#bal,#pBal{display:inline-block;transition:color .3s}
+.bal.up #bal,.pbig.up #pBal{color:var(--win);animation:balPop .45s}
+.bal.down #bal,.pbig.down #pBal{color:var(--lose)}
+@keyframes balPop{40%{transform:scale(1.15)}}
+/* бонус готов */
+#bonusBtn.ready{animation:ready 1.8s ease-in-out infinite}
+@keyframes ready{0%,100%{box-shadow:0 0 0 0 #ffc61a88}60%{box-shadow:0 0 0 7px #ffc61a00}}
+/* логотип */
+.logo i{position:relative;overflow:hidden}
+.logo i::after{content:"";position:absolute;inset:-50%;background:linear-gradient(105deg,transparent 40%,#fff8 50%,transparent 60%);transform:translateX(-100%);animation:shine 5s ease-in-out infinite}
+@keyframes shine{0%,70%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.auth .logo i{animation:float 3.2s ease-in-out infinite}
+@keyframes float{50%{transform:skewX(-8deg) translateY(-5px)}}
+/* кейсы */
+.case[aria-pressed="true"] .box{animation:caseFloat 3s ease-in-out infinite}
+@keyframes caseFloat{0%,100%{transform:translateY(-4px) rotate(-2deg)}50%{transform:translateY(-9px) rotate(1deg)}}
+.cases.opening .case[aria-pressed="true"] .box{animation:caseShake .5s}
+@keyframes caseShake{20%{transform:rotate(-8deg) scale(1.05)}40%{transform:rotate(7deg) scale(1.08)}60%{transform:rotate(-5deg)}80%{transform:rotate(3deg)}}
+.rolls.spinning .marker{animation:markerPulse .6s ease-in-out infinite}
+@keyframes markerPulse{50%{box-shadow:0 0 24px var(--pink),0 0 4px var(--pink)}}
+.roll .item{transition:opacity .4s,filter .4s}
+.roll.done .item:not(.won){opacity:.35;filter:grayscale(.6)}
+.roll .item.won{z-index:1;animation:won .7s cubic-bezier(.2,1.4,.4,1);border-color:var(--r);box-shadow:0 0 0 1px var(--r) inset,0 0 26px color-mix(in srgb,var(--r) 55%,transparent)}
+@keyframes won{40%{transform:scale(1.1)}}
+.roll.jackpot{animation:jackpot 1.2s ease-out}
+@keyframes jackpot{0%{box-shadow:0 0 0 0 #ffc61aaa}100%{box-shadow:0 0 0 18px #ffc61a00}}
+/* апгрейд */
+.gauge.spinning #arc{animation:arcPulse .7s ease-in-out infinite}
+@keyframes arcPulse{50%{filter:drop-shadow(0 0 14px #ffc61acc)}}
+#chanceTxt{display:inline-block}
+#chanceTxt.bump{animation:bump .3s}
+@keyframes bump{50%{transform:scale(1.08)}}
+#upBtn:not(:disabled){animation:upGlow 2.4s ease-in-out infinite}
+@keyframes upGlow{50%{box-shadow:0 8px 34px #ffc61a66}}
+/* частицы */
+.spark{position:fixed;left:0;top:0;width:8px;height:8px;border-radius:2px;pointer-events:none;z-index:60}
+/* лента */
+.feedlist .item.fresh{animation:slidein .6s cubic-bezier(.2,1.3,.4,1)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
 
 /* вход */
 .auth .logo{font-size:30px}
@@ -989,6 +1039,30 @@ const $=id=>document.getElementById(id);
 const fmt=n=>Math.round(n).toLocaleString('ru-RU');
 const RAR=['#b0c3d9','#5e98d9','#4b69ff','#8847ff','#d32ce6','#eb4b4b','#e4ae39'];
 const RNAME=['Ширпотреб','Промышленное','Армейское','Запрещённое','Засекреченное','Тайное','Редкое'];
+const calm=()=>matchMedia('(prefers-reduced-motion:reduce)').matches;
+// плавно меняет число в элементе
+function tween(el,to,f=fmt,ms=600){
+  const from=el._v==null?to:el._v;el._v=to;cancelAnimationFrame(el._raf);
+  if(from===to||calm()){el.textContent=f(to);return}
+  const t0=performance.now(),step=t=>{const k=Math.min(1,(t-t0)/ms),e=1-Math.pow(1-k,3);el.textContent=f(from+(to-from)*e);if(k<1)el._raf=requestAnimationFrame(step)};
+  el._raf=requestAnimationFrame(step);
+}
+function balAnim(el,box,v){
+  const old=el._v;tween(el,v);
+  if(old!=null&&old!==v){box.classList.remove('up','down');void box.offsetWidth;box.classList.add(v>old?'up':'down');clearTimeout(box._t);box._t=setTimeout(()=>box.classList.remove('up','down'),900)}
+}
+// салют из частиц с точки (x,y)
+function burst(x,y,colors=['#ffc61a','#ffdc5e','#ff5a1f','#fff'],n=36){
+  if(calm())return;
+  for(let i=0;i<n;i++){const d=document.createElement('i');d.className='spark';d.style.background=colors[i%colors.length];
+    if(i%3===0)d.style.borderRadius='50%';document.body.appendChild(d);
+    const a=Math.random()*Math.PI*2,r=60+Math.random()*140,dx=Math.cos(a)*r,dy=Math.sin(a)*r-60;
+    d.animate([{transform:`translate(${x}px,${y}px) scale(1)`,opacity:1},{transform:`translate(${x+dx}px,${y+dy+120}px) rotate(${Math.random()*720}deg) scale(.4)`,opacity:0}],
+      {duration:900+Math.random()*700,easing:'cubic-bezier(.15,.7,.3,1)'}).onfinish=()=>d.remove()}
+}
+function burstFrom(el,colors,n){const r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2,colors,n)}
+// карточки появляются по очереди (только первые, чтобы не тормозило)
+function stagger(box){if(!box||calm())return;box.classList.remove('stagger');[...box.children].forEach((c,i)=>c.style.setProperty('--i',Math.min(i,24)));void box.offsetWidth;box.classList.add('stagger');clearTimeout(box._st);box._st=setTimeout(()=>box.classList.remove('stagger'),1200)}
 function toast(t,c=''){const e=$('toast');e.textContent=t;e.className='toast on '+c;clearTimeout(e._t);e._t=setTimeout(()=>e.className='toast',2600)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
@@ -1079,10 +1153,11 @@ const bonusLeft=()=>ME&&ME.last_bonus?new Date(ME.last_bonus).getTime()+600000-(
 
 function renderTop(){
   if(!ME)return;
-  $('bal').textContent=fmt(ME.balance);$('uName').textContent=ME.username;$('uAva').textContent=(ME.username||'F')[0].toUpperCase();
+  balAnim($('bal'),$('bal').parentNode,ME.balance);$('uName').textContent=ME.username;$('uAva').textContent=(ME.username||'F')[0].toUpperCase();
   $('adminTab').hidden=!ME.is_admin;
   const left=bonusLeft();
   const b=$('bonusBtn');
+  b.classList.toggle('ready',left<=0&&!bonusBusy);
   if(left<=0){b.disabled=bonusBusy;b.textContent='+300'}else{b.disabled=true;const m=Math.floor(left/60000),s=Math.floor(left/1000)%60;b.textContent=`${m}:${String(s).padStart(2,'0')}`}
   $('invCount').textContent=INV.length?`${INV.length} шт.`:'';
   const c=CASES[cur];if(c){const cost=c.price*count;$('openBtn').disabled=busy||ME.balance<cost;
@@ -1153,6 +1228,8 @@ function showTab(name){
   document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===name));
   ['cases','upgrade','inv','shop','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==name);
   if(name==='upgrade')renderUpg();if(name==='inv')renderInv();if(name==='admin')adminSearch();if(name==='settings')renderSettings();if(name==='shop')renderShop();
+  const P=$('p-'+name);if(!calm()){P.classList.remove('view-in');void P.offsetWidth;P.classList.add('view-in')}
+  ({cases:['contents'],upgrade:['pickFrom','pickTo'],inv:['invList'],shop:['shopList']}[name]||[]).forEach(id=>stagger($(id)));
   window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>showTab(t.dataset.tab));
@@ -1161,7 +1238,7 @@ $('pSet').onclick=()=>showTab('settings');
 let bonusBusy=false;
 $('bonusBtn').onclick=async()=>{
   if(bonusBusy||!ME||bonusLeft()>0)return;bonusBusy=true;renderTop();
-  try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();toast('+300 монет','win')}
+  try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();toast('+300 монет','win');burstFrom($('bal'),['#ffc61a','#ffdc5e','#fff6c8'],24)}
   catch(e){toast(e.message,'lose');try{await loadMe()}catch(_){}}
   bonusBusy=false;renderTop();if(!$('p-upgrade').hidden)renderUpg();
 };
@@ -1206,7 +1283,7 @@ function renderCases(){
   const L=$('caseList');L.innerHTML='';
   CASES.forEach((c,i)=>{const b=document.createElement('button');b.className='case';b.style.setProperty('--cc',c.color);b.setAttribute('aria-pressed',i===cur);
     b.innerHTML=`${caseArt(c)}<span class="nm">${esc(c.name)}</span><span class="price"><span class="coin"></span>${fmt(c.price)}</span>`;
-    b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrips();renderTop()};L.appendChild(b)});
+    b.onclick=()=>{if(busy)return;cur=i;renderCases();fillStrips();renderTop();stagger($('contents'))};L.appendChild(b)});
   if(!CASES.length){$('contents').innerHTML='<div class="empty">Кейсов пока нет</div>';renderCount();return}
   const list=(CI[CASES[cur].id]||[]).slice(),tot=list.reduce((s,x)=>s+ +x.weight,0);
   const C=$('contents');C.innerHTML='';
@@ -1234,6 +1311,7 @@ async function openCases(){
   }catch(e){busy=false;renderTop();toast(e.message,'lose');return}
   await ensureItems(drops.map(d=>d.item));
   ME.balance=bal;fillStrips(drops.map(d=>d.item));renderTop();
+  $('caseList').classList.add('opening');$('rolls').classList.add('spinning');setTimeout(()=>$('caseList').classList.remove('opening'),600);
   const dur=matchMedia('(prefers-reduced-motion:reduce)').matches?.4:fast?1.2:5.5;
   [...$('rolls').children].forEach(roll=>{const s=roll.lastChild,box=roll.clientWidth,off=WIN_I*W+70-box/2+(Math.random()*90-45);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{s.style.transition=`transform ${dur+Math.random()*.4}s cubic-bezier(.08,.6,.12,1)`;s.style.transform=`translateX(${-off}px)`}))});
@@ -1242,6 +1320,11 @@ async function openCases(){
     if(ME!==me)return; // вышли из аккаунта во время прокрутки
     let sum=0;drops.forEach(d=>{INV.unshift({id:d.inv,item_id:d.item});const v=val(d.item);sum+=v;ME.best=Math.max(ME.best,v)});ME.opened+=n;
     busy=false;renderTop();
+    $('rolls').classList.remove('spinning');
+    [...$('rolls').children].forEach((roll,k)=>{const w=roll.lastChild.children[WIN_I],it=item(drops[k].item);if(!w)return;
+      w.classList.add('won');roll.classList.add('done');
+      // редкий или дорогой дроп — салют
+      if(it.rarity>=5||it.value>=c.price*4){roll.classList.add('jackpot');burstFrom(w,[RAR[it.rarity],'#ffc61a','#fff'],44)}});
     if(n===1){const it=item(drops[0].item);toast(`${it.weapon} | ${it.skin} — ${fmt(it.value)}`,it.value>=c.price?'win':'')}
     else toast(`${n} кейсов: выпало на ${fmt(sum)} (потрачено ${fmt(c.price*n)})`,sum>=c.price*n?'win':'');
   },dur*1000+600);
@@ -1330,7 +1413,8 @@ function renderUpg(){
       b.title=`${best.weapon} | ${best.skin}`;b.setAttribute('aria-pressed',to===best.id&&lastPick&&lastPick.t==='p'&&lastPick.v===p);b.onclick=()=>{if(!busy){to=best.id;lastPick={t:'p',v:p};syncUp();renderUpg()}};P.appendChild(b)});
   }
   const ch=chance();setArc(ch);
-  $('chanceTxt').textContent=(ch*100).toFixed(2)+'%';$('chanceSub').textContent=to?`${fmt(fv)} → ${fmt(ITEMS[to].value)}`:'шанс';
+  const CT=$('chanceTxt'),pv=CT._v;tween(CT,ch*100,x=>x.toFixed(2)+'%',400);
+  if(pv!=null&&Math.abs(pv-ch*100)>.005&&!calm()){CT.classList.remove('bump');void CT.offsetWidth;CT.classList.add('bump')}$('chanceSub').textContent=to?`${fmt(fv)} → ${fmt(ITEMS[to].value)}`:'шанс';
   $('upBtn').disabled=busy||fv<=0||!to||val(to)<=fv;
 }
 $('upBtn').onclick=async()=>{
@@ -1349,6 +1433,7 @@ $('upBtn').onclick=async()=>{
   const ch=+res.chance||0,ms=spinMs();const target=(+res.roll||0)*360-ch*180;
   $('needle').style.transitionDuration=ms/1000+'s';
   rot+=360*(ms<1000?2:5)+(((target-rot)%360)+360)%360;$('needle').style.transform=`rotate(${rot}deg)`;
+  $('needle').parentNode.classList.add('spinning');
   setTimeout(()=>{
     if(ME!==me)return; // вышли из аккаунта во время прокрутки
     INV=INV.filter(x=>!ids.includes(x.id));ME.ups++;sel=[];balUse=0;
@@ -1358,7 +1443,10 @@ $('upBtn').onclick=async()=>{
       const lost=(f.length>1?`${f.length} скинов сгорели`:f0?`${f0.weapon} | ${f0.skin} сгорел`:'')+(bal?(f.length?' и ':'')+`${fmt(bal)} монет сгорели`:'');
       if(res.comp_item&&res.comp_inv){const ci=item(res.comp_item);INV.unshift({id:res.comp_inv,item_id:res.comp_item});toast(`Не повезло: ${lost}. Утешительный приз: ${ci.weapon} | ${ci.skin} (${fmt(ci.value)})`,'lose')}
       else toast('Не повезло: '+lost,'lose');to=null}
-    flash(res.win?$('toSlot'):$('fromSlot'),res.win?'flash-win':'flash-lose');
+    $('needle').parentNode.classList.remove('spinning');
+    // выигранный скин встаёт в левую карточку — подсвечиваем её
+    flash($('fromSlot'),res.win?'flash-win':'flash-lose');
+    if(res.win)burstFrom($('fromSlot'),[RAR[it.rarity],'#3ddc97','#ffc61a','#fff'],54);
     busy=false;renderUpg();renderTop();loadFeed();loadStats()},ms+100);
 };
 
@@ -1438,7 +1526,7 @@ function renderInv(){
   $('invTotal').textContent=INV.length?'Стоимость: '+fmt(tot):'';$('sellAll').disabled=!INV.length||selling;$('pInvCount').textContent=INV.length?`(${INV.length})`:'';
   $('pName').textContent=ME.username;$('pAva').textContent=(ME.username||'F')[0].toUpperCase();
   $('pId').textContent='ID '+(UID?UID.slice(0,8):'—');$('pId').title=UID||'';
-  $('pBal').textContent=fmt(ME.balance);$('pInvVal').textContent=`Скинов на ${fmt(tot)}`;
+  $('pInvVal').textContent=`Скинов на ${fmt(tot)}`;
   $('pOpened').textContent=fmt(ME.opened);$('pOpened2').textContent=fmt(ME.opened);
   $('pWins').textContent=`${fmt(ME.up_wins)} / ${fmt(ME.ups)}`;$('pUps').textContent=fmt(ME.ups);
   const bestItem=Object.values(ITEMS).filter(i=>i.value<=ME.best).sort((a,b)=>b.value-a.value)[0];
@@ -1447,7 +1535,7 @@ function renderInv(){
   renderBonus();
 }
 function renderBonus(){
-  if(!ME)return;$('pBal').textContent=fmt(ME.balance);
+  if(!ME)return;balAnim($('pBal'),$('pBal').parentNode,ME.balance);
   const left=bonusLeft(),pb=$('pBonus');pb.disabled=left>0||bonusBusy;pb.textContent=left>0?'Бонус через '+Math.ceil(left/60000)+' мин':'Забрать бонус +300';
 }
 $('pBonus').onclick=async()=>{await $('bonusBtn').onclick();renderInv()};
