@@ -453,6 +453,16 @@ h2,.bigup,.gauge .chance b,.pbig,.case .nm,.pnum{font-weight:700}
     <div class="row"><input id="aq" placeholder="Ник или почта игрока" style="flex:1;min-width:200px"><button id="aSearch">Найти</button></div>
     <p class="note">Введи сумму и нажми «Выдать». Минус забирает монеты. Удача: 1 — обычные шансы, 2 — в два раза больше шанс в апгрейдере и заметно чаще дорогие скины в кейсах, 0.5 — хуже.</p>
     <div class="plist" id="plist"></div>
+    <hr>
+    <div class="row" style="justify-content:space-between;align-items:center"><h3>Пополнения</h3><button class="small ghost" id="refreshDeposits">Обновить</button></div>
+    <p class="note">Проверяй поступление в блокчейне до одобрения. Одобрение начисляет RUB-баланс один раз.</p>
+    <div class="row"><select id="depositFilter"><option value="pending">Ожидают</option><option value="all">Все</option><option value="approved">Одобрены</option><option value="rejected">Отклонены</option></select></div>
+    <div class="plist" id="depositList"></div>
+    <hr>
+    <div class="row" style="justify-content:space-between;align-items:center"><h3>Выводы скинов</h3><button class="small ghost" id="refreshWithdrawals">Обновить</button></div>
+    <p class="note">Заявки на передачу CS2-скинов обрабатываются вручную. Меняй статус после фактического действия.</p>
+    <div class="row"><select id="withdrawFilter"><option value="pending">Ожидают</option><option value="all">Все</option><option value="processing">В обработке</option><option value="completed">Выполнены</option><option value="rejected">Отклонены</option></select></div>
+    <div class="plist" id="withdrawList"></div>
   </section>
 </section>
 
@@ -953,7 +963,7 @@ function showTab(name){
   if(busy)return;
   document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===name));
   ['cases','upgrade','inv','shop','settings','admin'].forEach(p=>$('p-'+p).hidden=p!==name);
-  if(name==='upgrade')renderUpg();if(name==='inv')renderInv();if(name==='admin')adminSearch();if(name==='settings')renderSettings();if(name==='shop')renderShop();
+  if(name==='upgrade')renderUpg();if(name==='inv')renderInv();if(name==='admin'){adminSearch();adminQueue('deposit');adminQueue('withdrawal');}if(name==='settings')renderSettings();if(name==='shop')renderShop();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>showTab(t.dataset.tab));
@@ -1230,7 +1240,54 @@ async function adminSearch(){
       try{const nl=await rpc('fd_admin_luck',{p_user:r.id,p_luck:v});d.querySelector('.luck input').value=+nl;toast(`${r.username}: удача x${+nl}`,'win')}catch(e){toast(e.message,'lose')}};
     P.appendChild(d)});
 }
+
 $('aSearch').onclick=adminSearch;$('aq').onkeydown=e=>{if(e.key==='Enter')adminSearch()};
+
+/* ---------- admin deposit / skin withdrawal queues ---------- */
+const escAdmin = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function adminQueue(kind){
+  const isDep=kind==='deposit';
+  const list=$(isDep?'depositList':'withdrawList');
+  const filter=$(isDep?'depositFilter':'withdrawFilter').value;
+  list.innerHTML='<div class="note">Загрузка…</div>';
+  try{
+    const rows=await rpc(isDep?'fd_admin_deposits':'fd_admin_withdrawals',{p_status:filter});
+    list.innerHTML='';
+    if(!rows?.length){list.innerHTML='<div class="empty">Заявок нет</div>';return}
+    rows.forEach(r=>{
+      const d=document.createElement('div');d.className='prow';
+      const detail=isDep
+        ? `<div class="who"><b>${escAdmin(r.username||'Игрок')}</b><span>${escAdmin(r.currency||'')} · ${escAdmin(r.amount_crypto??'')} · ${escAdmin(r.amount_rub??'')} ₽</span><span>TX: ${escAdmin(r.tx_hash||'не указан')}</span><span>Memo: ${escAdmin(r.memo||'—')}</span></div>`
+        : `<div class="who"><b>${escAdmin(r.username||'Игрок')}</b><span>${escAdmin(r.skin_name||'CS2 skin')}</span><span>Предмет ID: ${escAdmin(r.item_id||'—')}</span><span>Заметка: ${escAdmin(r.admin_note||'—')}</span></div>`;
+      const status=escAdmin(r.status);
+      let actions='';
+      if(r.status==='pending'){
+        actions=isDep
+          ? '<button class="small" data-act="approved">Одобрить</button><button class="small ghost" data-act="rejected">Отклонить</button>'
+          : '<button class="small" data-act="processing">В обработке</button><button class="small ghost" data-act="completed">Выполнен</button><button class="small ghost" data-act="rejected">Отклонить</button>';
+      } else if(!isDep && r.status==='processing'){
+        actions='<button class="small" data-act="completed">Выполнен</button><button class="small ghost" data-act="rejected">Отклонить</button>';
+      }
+      d.innerHTML=`${detail}<div class="note">Статус: <b>${status}</b><br>${escAdmin(r.created_at||'')}</div><div class="give" style="flex-wrap:wrap">${actions}</div>`;
+      d.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+        const next=b.dataset.act;
+        if(!confirm(isDep?(next==='approved'?'Подтвердить поступление и начислить баланс?':'Отклонить пополнение?'):(next==='completed'?'Подтвердить фактическую передачу скина?':`Изменить статус заявки на «${next}»?`)))return;
+        b.disabled=true;
+        try{
+          await rpc(isDep?'fd_admin_deposit_status':'fd_admin_withdrawal_status',{p_id:r.id,p_status:next,p_note:''});
+          toast('Статус заявки обновлён','win');await adminQueue(kind);
+          if(isDep && next==='approved' && ME){await loadMe();renderTop()}
+        }catch(e){b.disabled=false;toast(e.message,'lose')}
+      });
+      list.appendChild(d);
+    });
+  }catch(e){list.innerHTML='';toast(e.message,'lose')}
+}
+$('refreshDeposits').onclick=()=>adminQueue('deposit');
+$('refreshWithdrawals').onclick=()=>adminQueue('withdrawal');
+$('depositFilter').onchange=()=>adminQueue('deposit');
+$('withdrawFilter').onchange=()=>adminQueue('withdrawal');
+
 </script>
 </body>
 </html>
