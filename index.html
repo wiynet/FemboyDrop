@@ -325,10 +325,7 @@ h2,.bigup,.gauge .chance b,.pbig,.case .nm,.pnum{font-weight:700}
       </div>
       <label for="depositAmount">Сумма перевода</label>
       <input id="depositAmount" type="number" min="0.000001" step="any" placeholder="Например, 10">
-      <label for="depositTx">TXID / хэш транзакции</label>
-      <input id="depositTx" placeholder="Вставь хэш после перевода">
-      <label for="depositMemo">Memo / комментарий (если нужен)</label>
-      <input id="depositMemo" placeholder="Для TON — комментарий, если указан">
+
       <p class="note" id="depositRateNote">Оценка суммы в RUB будет показана после настройки курса.</p>
       <div class="err" id="depositError"></div>
       <button id="depositSubmit" type="button">Отправить заявку</button>
@@ -1016,14 +1013,14 @@ $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bon
 // Never paste seed phrases or private keys into this file.
 const DEPOSIT_CONFIG = {
   wallets: {
-    USDT_TRC20: 'TSw1awLugwb6Ln7u2SpfHhAVq1JthS67H6',
-    USDT_TON: 'UQA5O3c1LpK_OWVMp6UkaWFcc6J-vEme8acIUA2Io8PNq07U',
-    TON: 'UQA5O3c1LpK_OWVMp6UkaWFcc6J-vEme8acIUA2Io8PNq07U'
+    USDT_TRC20: 'ВСТАВЬ_АДРЕС_USDT_TRC20',
+    USDT_TON: 'ВСТАВЬ_АДРЕС_USDT_TON',
+    TON: 'ВСТАВЬ_АДРЕС_TON'
   },
   rubPerUnit: {
-    USDT_TRC20: 90, // RUB per 1 USDT; set your displayed rate
-    USDT_TON: 90,   // RUB per 1 USDT; set your displayed rate
-    TON: 120         // RUB per 1 TON; set your displayed rate
+    USDT_TRC20: 0, // RUB per 1 USDT; set your displayed rate
+    USDT_TON: 0,   // RUB per 1 USDT; set your displayed rate
+    TON: 0         // RUB per 1 TON; set your displayed rate
   }
 };
 function updateDepositInfo(){
@@ -1055,13 +1052,11 @@ $('copyDepositWallet').onclick=async()=>{
 $('depositSubmit').onclick=async()=>{
   const currency=$('depositCurrency').value;
   const amount=Number($('depositAmount').value);
-  const tx=$('depositTx').value.trim();
-  const memo=$('depositMemo').value.trim();
+
   const rate=Number(DEPOSIT_CONFIG.rubPerUnit[currency]||0);
   const wallet=DEPOSIT_CONFIG.wallets[currency]||'';
   if(!wallet||wallet.startsWith('ВСТАВЬ_')){$('depositError').textContent='Администратор ещё не настроил адрес кошелька.';return}
   if(!(amount>0)){$('depositError').textContent='Укажи сумму перевода больше нуля.';return}
-  if(!tx){$('depositError').textContent='Вставь TXID/хэш транзакции.';return}
   if(!(rate>0)){$('depositError').textContent='Курс для этой валюты пока не настроен. Обратись к администратору.';return}
   const amountRub=Math.floor(amount*rate);
   if(amountRub<1){$('depositError').textContent='Сумма слишком мала.';return}
@@ -1072,14 +1067,12 @@ $('depositSubmit').onclick=async()=>{
       p_currency:currency,
       p_amount_crypto:amount,
       p_amount_rub:amountRub,
-      p_tx_hash:tx,
-      p_memo:memo
+      p_tx_hash:'',
+      p_memo:''
     });
     toast('Заявка отправлена на проверку','win');
     closeDeposit();
     $('depositAmount').value='';
-    $('depositTx').value='';
-    $('depositMemo').value='';
   }catch(e){$('depositError').textContent=e.message}
   finally{$('depositSubmit').disabled=false}
 };
