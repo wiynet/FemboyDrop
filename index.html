@@ -43,6 +43,16 @@ h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:va
 .note{color:var(--muted);font-size:13px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
+
+
+/* Deposit form */
+.deposit-overlay{position:fixed;inset:0;background:#000b;z-index:100;display:grid;place-items:center;padding:16px}
+.deposit-dialog{width:min(100%,480px);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 60px #0009}
+.deposit-dialog label{font-size:13px;font-weight:700;color:var(--muted)}
+.deposit-dialog select{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+.deposit-wallet{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.deposit-wallet code{overflow-wrap:anywhere;white-space:pre-wrap;color:var(--pink2)}
+
 /* auth */
 .auth{max-width:380px;margin:8vh auto 0;width:100%}
 .auth form{display:flex;flex-direction:column;gap:10px}
@@ -291,9 +301,39 @@ h2,.bigup,.gauge .chance b,.pbig,.case .nm,.pnum{font-weight:700}
       <button role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden>Админка</button>
     </nav>
     <div class="spacer"></div>
-    <div class="bal"><span class="coin"></span><span id="bal">0</span><button class="small" id="bonusBtn">Бонус</button></div>
+    <div class="bal"><span class="coin"></span><span id="bal">0</span><button class="small" id="depositBtn">Пополнить</button><button class="small ghost" id="bonusBtn">Бонус</button></div>
     <button class="me" id="meBtn" title="Профиль"><span class="ava" id="uAva">F</span><span class="user" id="uName"></span><span class="invc" id="invCount"></span></button>
   </header>
+
+  <div class="deposit-overlay" id="depositOverlay" hidden>
+    <section class="deposit-dialog" role="dialog" aria-modal="true" aria-labelledby="depositTitle">
+      <div class="row" style="justify-content:space-between">
+        <h2 id="depositTitle">Пополнение баланса</h2>
+        <button class="small ghost" id="depositClose" type="button">Закрыть</button>
+      </div>
+      <p class="note">Переведи криптовалюту на указанный адрес и укажи TXID. Начисление произойдёт после проверки администратором.</p>
+      <label for="depositCurrency">Валюта</label>
+      <select id="depositCurrency">
+        <option value="USDT_TRC20">USDT (TRC20)</option>
+        <option value="USDT_TON">USDT (TON)</option>
+        <option value="TON">TON</option>
+      </select>
+      <div class="deposit-wallet">
+        <div class="note">Адрес для перевода</div>
+        <code id="depositWallet">Адрес кошелька не настроен</code>
+        <button class="small ghost" id="copyDepositWallet" type="button">Копировать адрес</button>
+      </div>
+      <label for="depositAmount">Сумма перевода</label>
+      <input id="depositAmount" type="number" min="0.000001" step="any" placeholder="Например, 10">
+      <label for="depositTx">TXID / хэш транзакции</label>
+      <input id="depositTx" placeholder="Вставь хэш после перевода">
+      <label for="depositMemo">Memo / комментарий (если нужен)</label>
+      <input id="depositMemo" placeholder="Для TON — комментарий, если указан">
+      <p class="note" id="depositRateNote">Оценка суммы в RUB будет показана после настройки курса.</p>
+      <div class="err" id="depositError"></div>
+      <button id="depositSubmit" type="button">Отправить заявку</button>
+    </section>
+  </div>
 
   <section class="panel" id="p-cases">
     <div class="cases" id="caseList"></div>
@@ -970,6 +1010,80 @@ document.querySelectorAll('[data-tab]').forEach(t=>t.onclick=()=>showTab(t.datas
 $('meBtn').onclick=()=>showTab('inv');
 $('pSet').onclick=()=>showTab('settings');
 $('bonusBtn').onclick=async()=>{try{ME.balance=await rpc('fd_bonus');ME.last_bonus=new Date(Date.now()+serverOffset).toISOString();renderTop();toast('+300 монет','win')}catch(e){toast(e.message,'lose')}};
+
+/* ---------- user deposit form ---------- */
+// Set your own wallet addresses and approximate RUB rates here before publishing.
+// Never paste seed phrases or private keys into this file.
+const DEPOSIT_CONFIG = {
+  wallets: {
+    USDT_TRC20: 'ВСТАВЬ_АДРЕС_USDT_TRC20',
+    USDT_TON: 'ВСТАВЬ_АДРЕС_USDT_TON',
+    TON: 'ВСТАВЬ_АДРЕС_TON'
+  },
+  rubPerUnit: {
+    USDT_TRC20: 0, // RUB per 1 USDT; set your displayed rate
+    USDT_TON: 0,   // RUB per 1 USDT; set your displayed rate
+    TON: 0         // RUB per 1 TON; set your displayed rate
+  }
+};
+function updateDepositInfo(){
+  const currency=$('depositCurrency').value;
+  $('depositWallet').textContent=DEPOSIT_CONFIG.wallets[currency]||'Адрес кошелька не настроен';
+  const rate=Number(DEPOSIT_CONFIG.rubPerUnit[currency]||0);
+  $('depositRateNote').textContent=rate>0
+    ? `Ориентировочно: ${(Number($('depositAmount').value||0)*rate).toLocaleString('ru-RU',{maximumFractionDigits:2})} ₽. Курс ${rate} ₽ за 1 единицу.`
+    : 'Курс RUB не настроен. Администратор должен указать курс и сумму зачисления при проверке.';
+}
+function openDeposit(){
+  if(!ME){toast('Сначала войди в аккаунт','lose');return}
+  $('depositError').textContent='';
+  $('depositOverlay').hidden=false;
+  updateDepositInfo();
+}
+function closeDeposit(){$('depositOverlay').hidden=true}
+$('depositBtn').onclick=openDeposit;
+$('depositClose').onclick=closeDeposit;
+$('depositOverlay').addEventListener('click',e=>{if(e.target===$('depositOverlay'))closeDeposit()});
+$('depositCurrency').onchange=updateDepositInfo;
+$('depositAmount').oninput=updateDepositInfo;
+$('copyDepositWallet').onclick=async()=>{
+  const w=DEPOSIT_CONFIG.wallets[$('depositCurrency').value]||'';
+  if(!w||w.startsWith('ВСТАВЬ_')){toast('Сначала настрой адрес кошелька','lose');return}
+  try{await navigator.clipboard.writeText(w);toast('Адрес скопирован','win')}
+  catch(e){toast('Не удалось скопировать адрес','lose')}
+};
+$('depositSubmit').onclick=async()=>{
+  const currency=$('depositCurrency').value;
+  const amount=Number($('depositAmount').value);
+  const tx=$('depositTx').value.trim();
+  const memo=$('depositMemo').value.trim();
+  const rate=Number(DEPOSIT_CONFIG.rubPerUnit[currency]||0);
+  const wallet=DEPOSIT_CONFIG.wallets[currency]||'';
+  if(!wallet||wallet.startsWith('ВСТАВЬ_')){$('depositError').textContent='Администратор ещё не настроил адрес кошелька.';return}
+  if(!(amount>0)){$('depositError').textContent='Укажи сумму перевода больше нуля.';return}
+  if(!tx){$('depositError').textContent='Вставь TXID/хэш транзакции.';return}
+  if(!(rate>0)){$('depositError').textContent='Курс для этой валюты пока не настроен. Обратись к администратору.';return}
+  const amountRub=Math.floor(amount*rate);
+  if(amountRub<1){$('depositError').textContent='Сумма слишком мала.';return}
+  $('depositSubmit').disabled=true;
+  $('depositError').textContent='';
+  try{
+    await rpc('fd_create_deposit',{
+      p_currency:currency,
+      p_amount_crypto:amount,
+      p_amount_rub:amountRub,
+      p_tx_hash:tx,
+      p_memo:memo
+    });
+    toast('Заявка отправлена на проверку','win');
+    closeDeposit();
+    $('depositAmount').value='';
+    $('depositTx').value='';
+    $('depositMemo').value='';
+  }catch(e){$('depositError').textContent=e.message}
+  finally{$('depositSubmit').disabled=false}
+};
+
 
 /* ---------- fonts ---------- */
 const FONTS={upg:['Montserrat','Montserrat','Как на upgrader'],modern:['Unbounded','Rubik','Современный'],game:['Russo One','Exo 2','Игровой'],classic:['Russo One','Manrope','Классика'],cute:['Comfortaa','Comfortaa','Милый']};
